@@ -1,0 +1,51 @@
+# Balatro in the browser: the front end (BalatroFrontEnd) and the API
+# (BalatroWebAPI, with BalatroEngine).
+#
+# Lives in BalatroFrontEnd, next to ../BalatroWebAPI and ../balatro_src:
+#
+#   docker compose up --build        # then open http://localhost:8080
+#
+# The front end's build reads the game's own files (textures, sounds, shaders,
+# data, font) from a copy of the game in ../balatro_src; they go into the image,
+# not into either repository.
+#
+# Settings (environment or a .env file next to this one):
+#   WEB_PORT                     the front end's port (8080)
+#   API_PORT                     the API's port on this machine, docs at /docs (8000)
+#   BALATRO_API_DEBUG_COMMANDS   1 to allow the API's test helpers (off)
+name: balatro
+
+services:
+  api:
+    build:
+      context: ../BalatroWebAPI
+      # downloads (apt, uv, the engine from GitHub) go through this machine's own
+      # connection: Docker's bridge (MTU 1500) stalls behind a VPN tunnel with a
+      # smaller MTU (WireGuard: 1420)
+      network: host
+    environment:
+      BALATRO_API_DATABASE: /data/balatro.db
+      BALATRO_API_DEBUG_COMMANDS: ${BALATRO_API_DEBUG_COMMANDS:-0}
+    volumes:
+      - runs:/data # the runs (SQLite), kept between restarts
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      additional_contexts:
+        game: ../balatro_src
+      network: host # as for the API (apt, npm)
+    environment:
+      API_UPSTREAM: http://api:8000
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  runs:

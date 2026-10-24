@@ -1,0 +1,29 @@
+# The built front end, and the API behind /api/ on the same origin (the front
+# end calls /api/v1/... when no API URL is set). ${API_UPSTREAM} is filled in
+# when the container starts (nginx image templates).
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    gzip on;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml application/octet-stream;
+
+    location /api/ {
+        proxy_pass ${API_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Vite's hashed bundles never change
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

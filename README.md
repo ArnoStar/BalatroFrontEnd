@@ -44,6 +44,26 @@ once), and the API.
    the API at `VITE_API_URL` (set at build time) or at the page's
    `?api=http://host:port` parameter.
 
+## Run it with Docker
+
+`docker-compose.yml` builds and starts the front end and the API, with this
+project next to `../BalatroWebAPI` and the game in `../balatro_src`:
+
+```
+docker compose up --build                         # http://localhost:8080
+```
+
+The front end's image runs `npm run assets` itself (LuaJIT and LÖVE are in the
+build stage), reading the game from `balatro_src` (the build context `game`),
+and serves the built app with nginx, passing `/api/` to the API container.
+Runs are kept in the `runs` volume. `WEB_PORT`, `API_PORT` and
+`BALATRO_API_DEBUG_COMMANDS` change the defaults (see the file). Builds use the
+host's network, so they also download behind a VPN.
+
+Fonts rendered in the container differ from a dump made with another FreeType
+by one pixel on six accented letters (Ã Ñ Õ ã ñ õ), which English text never
+uses.
+
 ## How it works
 
 - **The game's UI, ported.** `shared/lib/engine` is the game's engine

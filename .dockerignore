@@ -1,0 +1,7 @@
+.git
+node_modules
+dist
+# regenerated in the image from the game copy (build context "game")
+public/resources
+public/fonts
+src/shared/config/generated
