@@ -51,6 +51,7 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          API_URL: ${{ secrets.API_URL }}
         run: |
           if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_SSH_KEY" ]; then
             echo "::warning::Not deployed: the DEPLOY_* secrets are not set (README.md, Deployment)"
