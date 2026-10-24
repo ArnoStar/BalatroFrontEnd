@@ -6,19 +6,20 @@
 #   api       the game API (BalatroWebAPI, with BalatroEngine)
 #   identity  accounts and sign-in (BalatroIndentityService), with its
 #             PostgreSQL (identity-db) and Redis (identity-redis)
+#   notification  sends the emails (BalatroNotificationService): the identity
+#             service publishes its confirmation codes to rabbitmq
+#   rabbitmq  the message broker between them (management UI at http://localhost:15672)
 #
-# and, only when their profile is asked for (docker compose --profile <name> up):
-#   mailpit   (profile mail) catches the identity service's emails; read them at
-#             http://localhost:8025. Use it with EMAIL_BACKEND=smtp SMTP_HOST=mailpit
-#             SMTP_PORT=1025 SMTP_SECURITY=none
-#   rabbitmq  (profile rabbitmq) for EMAIL_BACKEND=rabbitmq: the identity service
-#             publishes its emails there for a mail worker (none is included);
-#             management UI at http://localhost:15672
+# and, only when its profile is asked for (docker compose --profile mail up, or
+# COMPOSE_PROFILES=mail in .env):
+#   mailpit   catches the emails; read them at http://localhost:8025. Use it with
+#             EMAIL_BACKEND=smtp SMTP_HOST=mailpit SMTP_PORT=1025 SMTP_SECURITY=none
 #
 # The game engine (BalatroEngine) is a library inside the api image, not a service.
 #
 # Lives in BalatroFrontEnd, next to ../BalatroPortal, ../BalatroWebAPI,
-# ../BalatroIndentityService and ../balatro_src (a copy of the game):
+# ../BalatroIndentityService, ../BalatroNotificationService and ../balatro_src
+# (a copy of the game):
 #
 #   docker compose up --build        # then open http://localhost:8087
 #
@@ -35,15 +36,16 @@
 #   BALATRO_API_DEBUG_COMMANDS   1 to allow the API's test helpers (off)
 #   BALATRO_API_AUTH_JWKS_URL    empty to run the API without sign-in (everyone is one player)
 #   IDENTITY_DB_PASSWORD         the identity database's password (set it on a server)
-#   EMAIL_BACKEND, EMAIL_FROM, SMTP_*   how the identity service sends its emails
-#                                (console by default: the codes are in `docker compose logs identity`)
+#   EMAIL_BACKEND, EMAIL_FROM, SMTP_*   how the notification service sends the emails
+#                                (console by default: they are in `docker compose logs notification`)
 #   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET   Google sign-in (off when unset)
 #   IDENTITY_DB_PORT, IDENTITY_REDIS_PORT    the identity database's and Redis's ports on
 #                                this machine (55432, 56379), for the identity
 #                                service run outside Docker (its `make run`)
-#   RABBITMQ_PASSWORD            RabbitMQ's password (profile rabbitmq)
-#   MAILPIT_PORT, MAILPIT_SMTP_PORT, RABBITMQ_PORT, RABBITMQ_UI_PORT   their ports on this
-#                                machine (8025, 1025, 5672, 15672)
+#   RABBITMQ_PASSWORD            RabbitMQ's password (set it on a server)
+#   NOTIFICATION_PORT, MAILPIT_PORT, MAILPIT_SMTP_PORT, RABBITMQ_PORT, RABBITMQ_UI_PORT
+#                                their ports on this machine (8002, 8025, 1025, 5672,
+#                                15672), for the services run outside Docker
 name: balatro
 
 services:
@@ -113,13 +115,8 @@ services:
       OAUTH_REDIRECT_URIS: ${PUBLIC_URL:-http://localhost:8087}/auth/callback
       DATABASE_URL: postgresql+asyncpg://identity:${IDENTITY_DB_PASSWORD:-identity}@identity-db:5432/identity
       REDIS_URL: redis://identity-redis:6379/0
-      EMAIL_BACKEND: ${EMAIL_BACKEND:-console}
-      EMAIL_FROM: ${EMAIL_FROM:-Balatro <no-reply@localhost>}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      # the codes go to the notification service, which writes and sends the emails
+      EMAIL_BACKEND: notifications
       RABBITMQ_URL: amqp://balatro:${RABBITMQ_PASSWORD:-balatro}@rabbitmq:5672/
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
@@ -131,6 +128,9 @@ services:
       identity-db:
         condition: service_healthy
       identity-redis:
+        condition: service_healthy
+      # (healthy = consuming: its queues exist, so the codes are routed)
+      notification:
         condition: service_healthy
     restart: unless-stopped
 
@@ -165,27 +165,50 @@ services:
       retries: 10
     restart: unless-stopped
 
+  notification:
+    build:
+      context: ../BalatroNotificationService
+      network: host
+    environment:
+      RABBITMQ_URL: amqp://balatro:${RABBITMQ_PASSWORD:-balatro}@rabbitmq:5672/
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-console}
+      EMAIL_FROM: ${EMAIL_FROM:-Balatro <no-reply@localhost>}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      # the links in the emails: the site (the portal)
+      SITE_URL: ${PUBLIC_URL:-http://localhost:8087}
+    ports:
+      - "127.0.0.1:${NOTIFICATION_PORT:-8002}:8000" # /health
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
   mailpit:
     image: axllent/mailpit:v1.27
     profiles: ["mail"]
     ports:
       - "127.0.0.1:${MAILPIT_PORT:-8025}:8025" # the inbox, in a browser
-      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025" # SMTP, for the identity service run outside Docker
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025" # SMTP, for the notification service run outside Docker
     restart: unless-stopped
 
   rabbitmq:
     image: rabbitmq:4.1-management-alpine
-    profiles: ["rabbitmq"]
     environment:
       RABBITMQ_DEFAULT_USER: balatro
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-balatro}
     volumes:
       - rabbitmq:/var/lib/rabbitmq
     ports:
-      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672" # AMQP, for the identity service run outside Docker
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672" # AMQP, for the services run outside Docker
       - "127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672"
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # (only once the broker made its cookie file: a CLI run before it would make
+      # the file itself, with the wrong owner, and the broker would stop)
+      test: ["CMD-SHELL", "test -f /var/lib/rabbitmq/.erlang.cookie && rabbitmq-diagnostics -q check_port_connectivity"]
       interval: 10s
       timeout: 10s
       retries: 10

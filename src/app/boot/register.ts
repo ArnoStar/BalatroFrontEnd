@@ -18,6 +18,7 @@ import { register_collection_funcs } from '@/widgets/collection';
 import { register_stats_funcs } from '@/widgets/stats';
 import { main_menu, register_main_menu_overlays } from '@/pages/main-menu';
 import { init_run_page } from '@/pages/run';
+import { go_to_portal } from '@/shared/api';
 
 export function register_all() {
   G.UIDEF = G.UIDEF ?? {};
@@ -39,5 +40,7 @@ export function register_all() {
   init_run_page();
   register_main_menu_overlays();
   G.main_menu = main_menu;
-  G.FUNCS.quit = () => { window.close(); };
+  // the game's QUIT closes the program; here the main menu's HOME button goes
+  // back to the portal (the site's home: the player's runs and account)
+  G.FUNCS.quit = () => { go_to_portal(); };
 }

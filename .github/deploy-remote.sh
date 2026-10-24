@@ -14,9 +14,9 @@ api_url="${2:-}"
 exec 9>"$root/.deploy.lock"
 flock 9
 
-for d in BalatroWebAPI BalatroIndentityService BalatroPortal balatro_src; do
+for d in BalatroWebAPI BalatroIndentityService BalatroNotificationService BalatroPortal balatro_src; do
   if [ ! -d "$root/$d" ]; then
-    echo "::error::$root/$d is missing on the server (deploy BalatroWebAPI, BalatroIndentityService and BalatroPortal first; copy the game to balatro_src)"
+    echo "::error::$root/$d is missing on the server (deploy BalatroWebAPI, BalatroIndentityService, BalatroNotificationService and BalatroPortal first; copy the game to balatro_src)"
     exit 1
   fi
 done
@@ -34,8 +34,8 @@ else
 fi
 
 cd "$root/BalatroFrontEnd"
-docker compose up -d --build web portal
-for service in web portal; do
+docker compose up -d --build web portal notification
+for service in web portal notification; do
   cid="$(docker compose ps -q "$service")"
   status=starting
   for _ in $(seq 90); do
@@ -46,7 +46,7 @@ for service in web portal; do
   done
   if [ "$status" != healthy ]; then
     docker compose ps
-    docker compose logs --tail 80 "$service" api identity
+    docker compose logs --tail 80 "$service" api identity notification
     echo "::error::the $service service is $status"
     exit 1
   fi
