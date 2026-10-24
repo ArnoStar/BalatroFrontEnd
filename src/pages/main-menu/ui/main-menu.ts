@@ -26,7 +26,8 @@ function create_UIBox_main_menu_buttons() {
           { n: G.UIT.C, config: { align: 'cm' }, nodes: [
             UIBox_button({ button: 'options', colour: G.C.ORANGE, minw: 2.65, minh: 1.35, label: [localize('b_options_cap')], scale: text_scale * 1.2, col: true }),
             G.F_QUIT_BUTTON ? { n: G.UIT.C, config: { align: 'cm', minw: 0.2 }, nodes: [] } : null,
-            G.F_QUIT_BUTTON ? UIBox_button({ button: 'quit', colour: G.C.RED, minw: 2.65, minh: 1.35, label: [localize('b_quit_cap')], scale: text_scale * 1.2, col: true }) : null,
+            // (the game's QUIT: here HOME, back to the portal, see G.FUNCS.quit)
+            G.F_QUIT_BUTTON ? UIBox_button({ button: 'quit', colour: G.C.RED, minw: 2.65, minh: 1.35, label: ['HOME'], scale: text_scale * 1.2, col: true }) : null,
           ] },
           UIBox_button({ id: 'collection_button', button: 'your_collection', colour: G.C.PALE_GREEN, minw: 3.65, minh: 1.55, label: [localize('b_collection_cap')], scale: text_scale * 1.5, col: true }),
         ] },

@@ -72,6 +72,41 @@ keep the two in step. In the main menu's profile, a signed-in player sees
 their account's name, with ACCOUNT (the portal's account page) and LOG OUT
 buttons, in place of the local name field.
 
+## Run the whole site
+
+The site is six parts, each in its own repository next to this one: the
+portal (BalatroPortal), this game, the API (BalatroWebAPI), the identity
+service (BalatroIndentityService), the notification service that sends the
+emails (BalatroNotificationService), and the engine inside the API. Every
+repository has the same commands (`make` lists them): `make install`,
+`make run` (that part alone), `make check`. This repository also runs them
+all together, in two ways.
+
+**On this machine, from the repositories, with hot reload**:
+
+```
+make dev              # http://localhost:5174 (the portal; the game at /play/)
+MAIL=1 make dev       # the emails in Mailpit's inbox, http://localhost:8025
+AUTH=0 make dev       # the API without sign-in
+```
+
+`scripts/dev-all.sh` starts the identity service's PostgreSQL and Redis,
+RabbitMQ (and Mailpit) in Docker. It then starts the notification service
+(:8002; the emails are in its log lines), the identity service (:8001, which
+hands it the codes), the API with sign-in (:8000), the game (:5173) and the
+portal (:5174). Their logs share the
+terminal, each with its name. Ctrl-C stops them, and `make down` stops the
+Docker part. Google sign-in comes from the identity service's `.env`. The
+Docker stack below uses the same ports, so stop it first (`make down`).
+
+**In Docker, built from the repositories, configured by one `.env`**:
+
+```
+cp .env.example .env  # then fill it in (Google, email ...)
+make up               # http://localhost:8087
+make logs s=identity  # make ps, make restart s=api, make down, make config
+```
+
 ## Run it with Docker
 
 `docker-compose.yml` builds and starts the whole site. It expects this project
@@ -88,8 +123,9 @@ docker compose up --build                         # http://localhost:8087
 | `web` | the game, at `/play/` |
 | `api` | the game API, with sign-in on (it checks the identity service's tokens) |
 | `identity`, `identity-db`, `identity-redis` | accounts and sign-in, with PostgreSQL and Redis |
-| `mailpit` (`--profile mail`) | catches the identity service's emails: http://localhost:8025 (with `EMAIL_BACKEND=smtp SMTP_HOST=mailpit SMTP_PORT=1025 SMTP_SECURITY=none`) |
-| `rabbitmq` (`--profile rabbitmq`) | the broker for `EMAIL_BACKEND=rabbitmq` (a mail worker must read its queue) |
+| `notification` | sends the emails (BalatroNotificationService): the identity service hands it the codes through `rabbitmq` |
+| `rabbitmq` | the message broker between them (UI on `127.0.0.1:15672`) |
+| `mailpit` (`--profile mail`) | catches the emails: http://localhost:8025 (with `EMAIL_BACKEND=smtp SMTP_HOST=mailpit SMTP_PORT=1025 SMTP_SECURITY=none`) |
 
 This is the only compose file of the project: the identity service's `make
 services` also starts its database and Redis from it. Those are published on
@@ -115,12 +151,12 @@ uses.
 `.github/workflows/ci-cd.yml` checks every push and pull request on `main`
 and `dev` (typecheck, lint, build, with a stand-in for the game's data). A push
 or a merge to `main` then deploys: the code is copied to the server over SSH,
-and `docker compose up -d --build web portal` rebuilds the images there, since
-the server has the copy of the game they are made from. It starts the identity
-service too. The job waits until both are healthy and the portal reaches
+and `docker compose up -d --build web portal notification` rebuilds the images
+there, since the server has the copy of the game they are made from. It starts
+the identity service and RabbitMQ too. The job waits until all three are healthy and the portal reaches
 `/play/`, `/api/` and `/identity/`. A failed build leaves the running
-containers in place. BalatroWebAPI, BalatroIndentityService and BalatroPortal
-deploy themselves the same way, each rebuilding its own service with this
+containers in place. BalatroWebAPI, BalatroIndentityService,
+BalatroNotificationService and BalatroPortal deploy themselves the same way, each rebuilding its own service with this
 compose file.
 
 The server (Ubuntu), once:
@@ -137,7 +173,8 @@ The server (Ubuntu), once:
 4. `/opt/balatro/BalatroFrontEnd/.env`, which deployments keep, with at least
    `PUBLIC_URL` (the site's address as players type it, e.g.
    `https://balatro.example.com`) and `IDENTITY_DB_PASSWORD`. For real email,
-   add `EMAIL_BACKEND=smtp` and the `SMTP_*` settings; for Google sign-in, add
+   add `EMAIL_BACKEND=smtp` and the `SMTP_*` settings (the notification service
+   uses them), and set `RABBITMQ_PASSWORD`; for Google sign-in, add
    `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (see the identity service's
    README). Optionally `WEB_PORT=80`.
 
@@ -154,11 +191,12 @@ Actions → New repository secret):
 | `DEPLOY_PATH` | optional, the folder on the server (`/opt/balatro`) |
 | `API_URL` | optional, the API's public base URL, with or without a path: the browser calls `<API_URL>/api/v1/...` (e.g. `https://example.com/api` when a reverse proxy sends `/api/...` to the API without the `/api`). By default the page's own `/api/`, which goes to the API deployed next to it |
 
-The `DEPLOY_*` secrets go in all four repositories (BalatroFrontEnd,
-BalatroWebAPI, BalatroIndentityService, BalatroPortal). Until they are set,
+The `DEPLOY_*` secrets go in all five deployed repositories (BalatroFrontEnd,
+BalatroWebAPI, BalatroIndentityService, BalatroNotificationService,
+BalatroPortal). Until they are set,
 the deploy job is skipped with a warning. The first time, and whenever a new
 service is added to the compose file, deploy BalatroWebAPI,
-BalatroIndentityService and BalatroPortal first (Actions → CI/CD → Run
+BalatroIndentityService, BalatroNotificationService and BalatroPortal first (Actions → CI/CD → Run
 workflow, on `main`). Their deployments only copy their code until this
 repository's compose file runs them. Then deploy this repository: it starts
 everything.
@@ -226,3 +264,5 @@ src/
 - Face-down cards are never revealed by the API: a face-down card played from
   the hand is shown face down.
 - The Credits screen is not ported.
+- The main menu's QUIT is HOME: it goes back to the portal (the site's home,
+  with the player's runs and account) instead of closing the program.

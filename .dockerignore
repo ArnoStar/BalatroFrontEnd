@@ -5,3 +5,6 @@ dist
 public/resources
 public/fonts
 src/shared/config/generated
+
+# secrets (the settings come from the compose file, not the image)
+.env

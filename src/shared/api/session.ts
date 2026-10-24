@@ -122,6 +122,11 @@ export function go_to_account() {
   window.location.assign(`${portal_base()}/account`);
 }
 
+/** the portal's home page (the player's runs, their account) */
+export function go_to_portal() {
+  window.location.assign(`${portal_base()}/`);
+}
+
 /** ends this session at the identity service, then back to the portal */
 export async function sign_out() {
   const s = read_session();

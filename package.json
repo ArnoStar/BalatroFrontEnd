@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "assets": "node scripts/copy-assets.mjs",
-    "lint": "steiger src"
+    "lint": "steiger src",
+    "check": "npm run typecheck && npm run lint"
   },
   "devDependencies": {
     "@feature-sliced/steiger-plugin": "^0.8.0",
