@@ -129,7 +129,8 @@ export class DynaText extends Moveable {
         this.strings[k] = this.strings[k] ?? {};
         const old_string = this.strings[k].string;
         if (old_string !== new_string || first_pass) {
-          if (this.start_pop_in) this.reset_pop_in = true;
+          // Lua truthiness: pop_in = 0 (pop in at once) still pops the letters in
+          if (this.start_pop_in !== undefined && this.start_pop_in !== null && this.start_pop_in !== false) this.reset_pop_in = true;
           this.reset_pop_in = this.reset_pop_in || cfg.reset_pop_in;
           if (!this.reset_pop_in) {
             cfg.pop_out = null;
