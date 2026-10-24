@@ -8,6 +8,7 @@
 #
 #   docker build --network host --build-context game=../balatro_src -t balatro-frontend .
 #   docker run -p 8080:80 -e API_UPSTREAM=http://<api host>:8000 balatro-frontend
+#   (outside a compose network, a host name also needs API_RESOLVER, a DNS server)
 #
 # (--network host: the build downloads through this machine's connection, which
 # also works behind a VPN whose MTU is smaller than Docker's bridge.)
@@ -31,7 +32,9 @@ ARG VITE_API_URL=""
 RUN npm run build
 
 FROM nginx:1.28-alpine
-ENV API_UPSTREAM=http://api:8000
+# API_RESOLVER: the DNS that finds API_UPSTREAM's host (Docker's, on a compose network)
+ENV API_UPSTREAM=http://api:8000 \
+    API_RESOLVER=127.0.0.11
 COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80

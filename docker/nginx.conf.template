@@ -1,6 +1,7 @@
 # The built front end, and the API behind /api/ on the same origin (the front
-# end calls /api/v1/... when no API URL is set). ${API_UPSTREAM} is filled in
-# when the container starts (nginx image templates).
+# end calls /api/v1/... when no API URL is set). ${API_UPSTREAM} and
+# ${API_RESOLVER} are filled in when the container starts (nginx image
+# templates).
 server {
     listen 80;
     server_name _;
@@ -9,8 +10,13 @@ server {
     gzip on;
     gzip_types text/plain text/css application/javascript application/json image/svg+xml application/octet-stream;
 
+    # the API's address is looked up again as it changes (a redeployed API
+    # container gets a new one): Docker's DNS by default
+    resolver ${API_RESOLVER} valid=10s ipv6=off;
+
     location /api/ {
-        proxy_pass ${API_UPSTREAM};
+        set $api_upstream ${API_UPSTREAM};
+        proxy_pass $api_upstream;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
