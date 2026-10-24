@@ -39,7 +39,7 @@ services:
         game: ../balatro_src
       network: host # as for the API (apt, npm)
     environment:
-      API_UPSTREAM: http://api:8000
+      API_UPSTREAM: ${API_URL}
     ports:
       - "${WEB_PORT:-8087}:80"
     depends_on:
