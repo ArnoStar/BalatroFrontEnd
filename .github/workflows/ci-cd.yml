@@ -51,7 +51,6 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          API_URL: ${{ secrets.API_URL }}
         run: |
           if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_SSH_KEY" ]; then
             echo "::warning::Not deployed: the DEPLOY_* secrets are not set (README.md, Deployment)"
@@ -68,5 +67,6 @@ jobs:
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          # optional: where the front end's /api/ goes (the compose file's API by default)
           API_URL: ${{ secrets.API_URL }}
         run: .github/deploy.sh

@@ -50,13 +50,13 @@ once), and the API.
 project next to `../BalatroWebAPI` and the game in `../balatro_src`:
 
 ```
-docker compose up --build                         # http://localhost:8080
+docker compose up --build                         # http://localhost:8087
 ```
 
 The front end's image runs `npm run assets` itself (LuaJIT and LÖVE are in the
 build stage), reading the game from `balatro_src` (the build context `game`),
 and serves the built app with nginx, passing `/api/` to the API container.
-Runs are kept in the `runs` volume. `WEB_PORT`, `API_PORT` and
+Runs are kept in the `runs` volume. `WEB_PORT`, `API_URL`, `API_PORT` and
 `BALATRO_API_DEBUG_COMMANDS` change the defaults (see the file). Builds use the
 host's network, so they also download behind a VPN.
 
@@ -99,6 +99,7 @@ Actions → New repository secret):
 | `DEPLOY_KNOWN_HOSTS` | the server's host keys (`ssh-keyscan <server>`) |
 | `DEPLOY_PORT` | optional, the SSH port (22) |
 | `DEPLOY_PATH` | optional, the folder on the server (`/opt/balatro`) |
+| `API_URL` | optional, where the site's `/api/` goes: an API's base URL without a path (`https://api.example.com`). By default, the API deployed next to it |
 
 Until they are set, the deploy job is skipped with a warning. The first time,
 deploy BalatroWebAPI, then this repository (Actions → CI/CD → Run workflow,
