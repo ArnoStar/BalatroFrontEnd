@@ -64,6 +64,46 @@ Fonts rendered in the container differ from a dump made with another FreeType
 by one pixel on six accented letters (Ã Ñ Õ ã ñ õ), which English text never
 uses.
 
+## Deployment
+
+`.github/workflows/ci-cd.yml` checks every push and pull request on `main`
+and `dev` (typecheck, lint, build, with a stand-in for the game's data). A push
+or a merge to `main` then deploys: the code is copied to the server over SSH
+and `docker compose up -d --build web` rebuilds the image there, since the
+server has the copy of the game it is made from. The job waits until the new
+container is healthy; a failed build leaves the running one in place.
+BalatroWebAPI's workflow deploys the API the same way.
+
+The server (Ubuntu), once:
+
+1. Docker Engine with the compose and buildx plugins, and rsync. Docker's own
+   packages have both plugins (docs.docker.com/engine/install/ubuntu); with
+   Ubuntu's `docker.io`, add `docker-compose-v2` and `docker-buildx`. Then
+   `sudo apt install rsync`.
+2. A user for the deployments, in the `docker` group
+   (`sudo adduser --disabled-password deploy && sudo usermod -aG docker deploy`),
+   with the deploy key's public half in `~deploy/.ssh/authorized_keys`.
+3. `/opt/balatro`, owned by that user, with the game in
+   `/opt/balatro/balatro_src` (e.g. `rsync -a balatro_src/ deploy@server:/opt/balatro/balatro_src/`).
+4. Optionally `/opt/balatro/BalatroFrontEnd/.env` (`WEB_PORT=80`...), which
+   deployments keep.
+
+The secrets, in both repositories (Settings → Secrets and variables →
+Actions → New repository secret):
+
+| Secret | Value |
+|---|---|
+| `DEPLOY_HOST` | the server's address |
+| `DEPLOY_USER` | the deployment user (`deploy`) |
+| `DEPLOY_SSH_KEY` | the private key of a key pair made for it (`ssh-keygen -t ed25519 -N '' -f balatro_deploy`) |
+| `DEPLOY_KNOWN_HOSTS` | the server's host keys (`ssh-keyscan <server>`) |
+| `DEPLOY_PORT` | optional, the SSH port (22) |
+| `DEPLOY_PATH` | optional, the folder on the server (`/opt/balatro`) |
+
+Until they are set, the deploy job is skipped with a warning. The first time,
+deploy BalatroWebAPI, then this repository (Actions → CI/CD → Run workflow,
+on `main`): the API's deployment copies its code, the front end's starts both.
+
 ## How it works
 
 - **The game's UI, ported.** `shared/lib/engine` is the game's engine
