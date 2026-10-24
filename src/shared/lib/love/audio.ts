@@ -1,6 +1,8 @@
-// love.audio on WebAudio. 'static' sources are decoded buffers; 'stream'
-// sources (music, ambience) are media elements, so the long tracks aren't
-// decoded into memory. setPitch changes speed and pitch together, as in LÖVE.
+// love.audio on WebAudio. Every source plays a decoded buffer on the audio
+// thread: the effects ('static') and the long tracks ('stream': music,
+// ambience) alike. (The tracks used to be media elements; some browsers
+// silenced those while the page was rendering, but never the effects.)
+// setPitch changes speed and pitch together, as in LÖVE.
 
 export interface Source {
   play(): void;
@@ -19,7 +21,13 @@ export class Audio {
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
-    this.ctx = new AudioContext();
+    // the game's sounds are 44.1 kHz: decoded at that rate they aren't resampled
+    // (and the music's buffers are smaller than at the device's 48 kHz)
+    try {
+      this.ctx = new AudioContext({ sampleRate: 44100 });
+    } catch {
+      this.ctx = new AudioContext();
+    }
     this.master = this.ctx.createGain();
     this.master.connect(this.ctx.destination);
   }
@@ -30,6 +38,12 @@ export class Audio {
   }
 
   url(code: string) { return `${this.baseUrl}/${code}.ogg`; }
+
+  /** the decoded sound, if it is ready */
+  ready(code: string): AudioBuffer | null {
+    const b = this.buffers.get(code);
+    return b instanceof AudioBuffer ? b : null;
+  }
 
   preload(code: string): Promise<AudioBuffer | null> {
     const have = this.buffers.get(code);
@@ -67,7 +81,6 @@ class StaticSource implements Source {
   play() {
     this.stop();
     this.playing = true;
-    const buf = (this.a as any).buffers.get(this.code);
     const start = (b: AudioBuffer | null) => {
       if (!b || !this.playing) { this.playing = false; return; }
       const n = this.a.ctx.createBufferSource();
@@ -78,7 +91,8 @@ class StaticSource implements Source {
       this.node = n;
       n.start();
     };
-    if (buf instanceof AudioBuffer) start(buf);
+    const buf = this.a.ready(this.code);
+    if (buf) start(buf);
     else {
       this.pending = true;
       this.a.preload(this.code).then((b) => { if (this.pending) { this.pending = false; start(b); } });
@@ -104,36 +118,74 @@ class StaticSource implements Source {
   release() { this.stop(); this.gain.disconnect(); }
 }
 
+/**
+ * A long track (LÖVE streams it from its file). Its buffer is decoded once
+ * and shared. The track keeps its own clock from play(): if the buffer is
+ * still decoding then, it starts where it would be by the time it's ready,
+ * so tracks started together (the five music tracks) stay in step.
+ */
 class StreamSource implements Source {
-  private el: HTMLAudioElement;
+  private a: Audio;
+  private code: string;
+  private node: AudioBufferSourceNode | null = null;
   private gain: GainNode;
-  private node: MediaElementAudioSourceNode;
   private playing = false;
+  private pitch = 1;
+  /** the position in the track (s) at the context time `at` */
+  private pos = 0;
+  private at = 0;
 
   constructor(a: Audio, code: string) {
-    this.el = new window.Audio(a.url(code));
-    this.el.preload = 'auto';
-    (this.el as any).preservesPitch = false;
-    (this.el as any).mozPreservesPitch = false;
-    this.el.crossOrigin = 'anonymous';
-    this.node = a.ctx.createMediaElementSource(this.el);
+    this.a = a;
+    this.code = code;
     this.gain = a.ctx.createGain();
-    this.node.connect(this.gain);
     this.gain.connect(a.master);
-    this.el.addEventListener('ended', () => { this.playing = false; });
+    a.preload(code);
+  }
+
+  private position() {
+    return this.pos + (this.a.ctx.currentTime - this.at) * this.pitch;
   }
 
   play() {
+    this.stop();
     this.playing = true;
-    this.el.currentTime = 0;
-    this.el.play().catch(() => { this.playing = false; });
+    this.pos = 0;
+    this.at = this.a.ctx.currentTime;
+    const start = (b: AudioBuffer | null) => {
+      if (!this.playing || this.node) return;
+      const offset = this.position();
+      if (!b || offset >= b.duration) { this.playing = false; return; }
+      const n = this.a.ctx.createBufferSource();
+      n.buffer = b;
+      n.playbackRate.value = this.pitch;
+      n.connect(this.gain);
+      n.onended = () => { if (this.node === n) { this.playing = false; this.node = null; } };
+      this.node = n;
+      n.start(0, offset);
+    };
+    const buf = this.a.ready(this.code);
+    if (buf) start(buf);
+    else this.a.preload(this.code).then(start);
   }
-  stop() { this.playing = false; this.el.pause(); }
+
+  stop() {
+    if (this.node) {
+      try { this.node.stop(); } catch { /* not started */ }
+      this.node.disconnect();
+      this.node = null;
+    }
+    this.playing = false;
+  }
+
   isPlaying() { return this.playing; }
   setVolume(v: number) { this.gain.gain.value = Math.max(0, v); }
   setPitch(p: number) {
-    const r = Math.min(16, Math.max(0.0625, p));
-    if (Math.abs(this.el.playbackRate - r) > 1e-4) this.el.playbackRate = r;
+    if (p === this.pitch) return;
+    this.pos = this.position();
+    this.at = this.a.ctx.currentTime;
+    this.pitch = p;
+    if (this.node) this.node.playbackRate.value = p;
   }
-  release() { this.stop(); this.node.disconnect(); this.gain.disconnect(); this.el.src = ''; }
+  release() { this.stop(); this.gain.disconnect(); }
 }

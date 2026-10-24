@@ -39,6 +39,8 @@ export function init_sources() {
     SOURCES[code] = [];
     if (!isStream(code)) love.audio.preload(code);
   }
+  // then the long tracks, decoding in the background (the music starts at the first click)
+  for (const code of SOUND_CODES) if (isStream(code)) love.audio.preload(code);
 }
 
 function SET_SFX(s: SoundEntry, args: any) {
