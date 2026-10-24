@@ -31,7 +31,8 @@ rsync -az --delete -e "$ssh_cmd" \
   --exclude public/resources --exclude public/fonts --exclude src/shared/config/generated \
   ./ "$target:$root/BalatroFrontEnd/"
 
-$ssh_cmd "$target" bash -s -- "$root" <<'REMOTE'
+api_url_b64="$(printf '%s' "$API_URL" | base64 -w0)"
+$ssh_cmd "$target" "API_URL_B64='$api_url_b64' bash -s -- '$root'" <<'REMOTE'
 set -euo pipefail
 root="$1"
 # one deployment at a time (the API's deploys here too)
