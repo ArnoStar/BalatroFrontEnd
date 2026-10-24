@@ -1,0 +1,6 @@
+node_modules/
+dist/
+# Generated from a copy of the game by `npm run assets` (the game's own files)
+public/resources/
+public/fonts/
+src/shared/config/generated/game.json

@@ -1,0 +1,22 @@
+{
+  "name": "balatro-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Balatro's user interface, ported from the game's Lua source to TypeScript/WebGL2, played through BalatroWebAPI",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "assets": "node scripts/copy-assets.mjs",
+    "lint": "steiger src"
+  },
+  "devDependencies": {
+    "@feature-sliced/steiger-plugin": "^0.8.0",
+    "playwright-core": "^1.56.1",
+    "steiger": "^0.8.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  }
+}
