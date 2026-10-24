@@ -11,8 +11,9 @@
 #
 # Settings (environment or a .env file next to this one):
 #   WEB_PORT                     the front end's port (8087)
-#   API_URL                      where the front end's /api/ goes: an API's base URL,
-#                                with or without a path (the api service: http://api:8000)
+#   API_URL                      the API's public base URL, with or without a path: the
+#                                browser calls <API_URL>/api/v1/... (default: the page's
+#                                own /api/, which goes to the api service below)
 #   API_PORT                     the API's port on this machine, docs at /docs (8000)
 #   BALATRO_API_DEBUG_COMMANDS   1 to allow the API's test helpers (off)
 name: balatro
@@ -40,7 +41,11 @@ services:
       additional_contexts:
         game: ../balatro_src
       network: host # as for the API (apt, npm)
+      args:
+        # the browser calls the API there (by default, /api on the page's own origin)
+        VITE_API_URL: ${API_URL:-}
     environment:
+      # and the page's own /api/ goes there too
       API_UPSTREAM: ${API_URL:-http://api:8000}
     ports:
       - "${WEB_PORT:-8087}:80"
