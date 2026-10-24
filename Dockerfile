@@ -32,10 +32,12 @@ ARG VITE_API_URL=""
 RUN npm run build
 
 FROM nginx:1.28-alpine
-# API_RESOLVER: the DNS that finds API_UPSTREAM's host (Docker's, on a compose network)
+# API_UPSTREAM: where /api/ goes, an API's base URL, with or without a path.
+# API_RESOLVER: the DNS that finds its host (Docker's, on a compose network)
 ENV API_UPSTREAM=http://api:8000 \
     API_RESOLVER=127.0.0.11
 COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY --chmod=755 docker/api-upstream.envsh /docker-entrypoint.d/16-api-upstream.envsh
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
 HEALTHCHECK --interval=10s --timeout=3s CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]

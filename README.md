@@ -99,7 +99,7 @@ Actions → New repository secret):
 | `DEPLOY_KNOWN_HOSTS` | the server's host keys (`ssh-keyscan <server>`) |
 | `DEPLOY_PORT` | optional, the SSH port (22) |
 | `DEPLOY_PATH` | optional, the folder on the server (`/opt/balatro`) |
-| `API_URL` | optional, where the site's `/api/` goes: an API's base URL without a path (`https://api.example.com`). By default, the API deployed next to it |
+| `API_URL` | optional, where the site's `/api/` goes: an API's base URL, with or without a path (`https://api.example.com`, `https://example.com/balatro`: `/api/v1/...` goes to `<API_URL>/api/v1/...`). By default, the API deployed next to it |
 
 Until they are set, the deploy job is skipped with a warning. The first time,
 deploy BalatroWebAPI, then this repository (Actions → CI/CD → Run workflow,

@@ -12,7 +12,7 @@
 # Settings (environment or a .env file next to this one):
 #   WEB_PORT                     the front end's port (8087)
 #   API_URL                      where the front end's /api/ goes: an API's base URL,
-#                                no path (the api service below: http://api:8000)
+#                                with or without a path (the api service: http://api:8000)
 #   API_PORT                     the API's port on this machine, docs at /docs (8000)
 #   BALATRO_API_DEBUG_COMMANDS   1 to allow the API's test helpers (off)
 name: balatro

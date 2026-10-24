@@ -3,8 +3,8 @@
 # restarts the web service with docker compose, waits until it is healthy, and
 # checks that its /api/ reaches the API.
 #   deploy-remote.sh <root> [api_url]
-# api_url: where /api/ goes, an API's base URL without a path (the API_URL
-# secret); empty: the server's .env, or the compose file's own API service.
+# api_url: where /api/ goes, an API's base URL, with or without a path (the
+# API_URL secret); empty: the server's .env, or the compose file's API service.
 set -euo pipefail
 root="$1"
 api_url="${2:-}"
@@ -20,14 +20,14 @@ for d in BalatroWebAPI balatro_src; do
   fi
 done
 
+# a pasted secret may end with a newline
+api_url="$(printf '%s' "$api_url" | tr -d '[:space:]')"
 if [ -n "$api_url" ]; then
-  api_url="${api_url%/}"
-  # nginx passes the request's path on only if the address has none of its own
-  if ! [[ "$api_url" =~ ^https?://[^/[:space:]]+$ ]]; then
-    echo "::error::API_URL must be an API's base URL without a path, like http://host:8000 or https://api.example.com"
+  if ! [[ "$api_url" =~ ^https?://[^/]+ ]]; then
+    echo "::error::API_URL must be an http(s) URL: http://host:8000, https://api.example.com, https://example.com/balatro"
     exit 1
   fi
-  export API_URL="$api_url"
+  export API_URL="${api_url%/}"
 else
   unset API_URL
 fi

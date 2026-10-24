@@ -1,0 +1,13 @@
+# Sourced by the nginx image's entrypoint before it fills in the templates.
+# API_UPSTREAM is where /api/ goes, possibly with a path (an API behind a
+# prefix: https://example.com/balatro). nginx gets its origin (API_ORIGIN) and
+# its path (API_PREFIX, put in front of the request's path) apart.
+api_url="${API_UPSTREAM%/}"
+api_rest="${api_url#*://}"
+case "$api_rest" in
+  */*) API_PREFIX="/${api_rest#*/}" ;;
+  *) API_PREFIX="" ;;
+esac
+API_ORIGIN="${api_url%"$API_PREFIX"}"
+export API_ORIGIN API_PREFIX
+unset api_url api_rest
