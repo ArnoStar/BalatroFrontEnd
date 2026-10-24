@@ -2,11 +2,14 @@
 // G.UIDEF.profile_select, profile_option, language_selector; button_callbacks.lua:
 // profile_select, can_load_profile, load_profile, can_delete_profile,
 // delete_profile, language_selection, change_lang). This front end has one
-// profile (kept in the browser) and English only.
+// profile (kept in the browser) and English only. When the player is signed
+// in, the profile is their account: its name comes from the account (changed in
+// the portal), with ACCOUNT and LOG OUT buttons in place of the name field.
 import { G, Event, play_sound } from '@/shared/lib/engine';
 import { localize } from '@/shared/lib/localization';
 import { create_UIBox_generic_options, create_tabs, create_text_input } from '@/shared/ui';
 import { profile, save_profile } from '@/shared/config';
+import { display_name, go_to_account, sign_out } from '@/shared/api';
 import { create_progress_box, set_profile_progress } from '@/widgets/stats';
 
 function profile_option(_profile: number) {
@@ -15,9 +18,10 @@ function profile_option(_profile: number) {
   const p = G.PROFILES[_profile - 1];
   if (current) set_profile_progress();
   const lwidth = 1, rwidth = 1, scale = 1;
+  const account = current ? display_name() : null;
   return { n: G.UIT.ROOT, config: { align: 'cm', colour: G.C.CLEAR }, nodes: [
     { n: G.UIT.R, config: { align: 'cm', padding: 0.1, minh: 0.8 }, nodes: [
-      { n: G.UIT.R, config: { align: 'cm' }, nodes: [
+      account ? account_row(account) : { n: G.UIT.R, config: { align: 'cm' }, nodes: [
         create_text_input({ w: 4, max_length: 16, prompt_text: localize('k_enter_name'), ref_table: p, ref_value: 'name', extended_corpus: true, keyboard_offset: 1 }),
       ] },
     ] },
@@ -55,6 +59,23 @@ function profile_option(_profile: number) {
     { n: G.UIT.R, config: { align: 'cm', padding: 0 }, nodes: [
       { n: G.UIT.T, config: { id: 'warning_text', text: localize('ph_click_confirm'), scale: 0.4, colour: G.C.CLEAR } },
     ] },
+  ] };
+}
+
+/** the signed-in account: its name, and buttons to the portal's account page and to sign out */
+function account_row(name: string) {
+  const button = (label: string, colour: any, fn: string) => ({
+    n: G.UIT.C, config: { align: 'cm', minw: 1.9, minh: 0.6, padding: 0.1, r: 0.1, hover: true, colour, button: fn, shadow: true },
+    nodes: [{ n: G.UIT.T, config: { text: label, scale: 0.35, colour: G.C.UI.TEXT_LIGHT } }],
+  });
+  return { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [
+    { n: G.UIT.C, config: { align: 'cm', minw: 4, minh: 0.6, padding: 0.1, r: 0.1, colour: G.C.BLACK }, nodes: [
+      { n: G.UIT.T, config: { text: name, scale: 0.45, colour: G.C.UI.TEXT_LIGHT, shadow: true } },
+    ] },
+    { n: G.UIT.C, config: { align: 'cm', minw: 0.15 }, nodes: [] },
+    button('ACCOUNT', G.C.BLUE, 'account_page'),
+    { n: G.UIT.C, config: { align: 'cm', minw: 0.1 }, nodes: [] },
+    button('LOG OUT', G.C.RED, 'log_out'),
   ] };
 }
 
@@ -119,6 +140,8 @@ export function register_main_menu_overlays() {
       G.FUNCS.exit_overlay_menu();
     }
   };
+  G.FUNCS.account_page = () => { go_to_account(); };
+  G.FUNCS.log_out = () => { void sign_out(); };
   G.FUNCS.language_selection = () => {
     G.SETTINGS.paused = true;
     G.FUNCS.overlay_menu({ definition: language_selector() });

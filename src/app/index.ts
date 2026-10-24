@@ -3,11 +3,13 @@
 import { G, set_globals, resize } from '@/shared/lib/engine';
 import { love, initLove } from '@/shared/lib/love';
 import { start_up } from './boot/start-up';
+import { ensure_signed_in, name_profile } from './boot/sign-in';
 import { register_all } from './boot/register';
 import { game_update, game_draw } from './loop/game-loop';
 import { show_splash } from '@/pages/splash';
 import { main_menu } from '@/pages/main-menu';
 import { run } from '@/entities/run';
+import { SigningIn } from '@/shared/api';
 
 const canvas = document.getElementById('screen') as HTMLCanvasElement;
 
@@ -108,11 +110,13 @@ function wire_input() {
 }
 
 async function main() {
+  await ensure_signed_in();
   fit_canvas();
-  initLove(canvas, '/resources/sounds');
+  initLove(canvas, `${import.meta.env.BASE_URL}resources/sounds`);
   set_globals();
   loading_bar(0);
   await start_up((p) => loading_bar(p));
+  name_profile();
   register_all();
   wire_input();
   show_splash(main_menu);
@@ -157,6 +161,7 @@ async function main() {
 }
 
 main().catch((err) => {
+  if (err instanceof SigningIn) return; // on the way to the portal's sign-in page
   console.error(err);
   document.body.insertAdjacentHTML('beforeend',
     `<pre style="position:fixed;inset:20px;color:#fff;font:14px monospace;white-space:pre-wrap">${String(err?.stack ?? err)}</pre>`);

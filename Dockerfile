@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
-# The front end in a container: nginx serves the built app and passes /api/ to
-# the API (API_UPSTREAM, http://api:8000 by default, as in docker compose).
+# The game in a container: nginx serves the built app at /play/ and passes
+# /api/ to the API (API_UPSTREAM, http://api:8000 by default, as in docker
+# compose). In the full stack the portal (BalatroPortal) is in front of it.
 #
 # The game's own files (textures, sounds, shaders, data, font) are not in this
 # repository: the build reads them from a copy of the game, given as the build
@@ -29,6 +30,9 @@ COPY . .
 RUN --mount=from=game,target=/game BALATRO_SRC=/game npm run assets
 # an API on another origin (the default is /api on the page's own)
 ARG VITE_API_URL=""
+# the identity service and the portal elsewhere (the default: /identity and / on the page's origin)
+ARG VITE_IDENTITY_URL=""
+ARG VITE_PORTAL_URL=""
 RUN npm run build
 
 FROM nginx:1.28-alpine
@@ -38,6 +42,6 @@ ENV API_UPSTREAM=http://api:8000 \
     API_RESOLVER=127.0.0.11
 COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --chmod=755 docker/api-upstream.envsh /docker-entrypoint.d/16-api-upstream.envsh
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html/play
 EXPOSE 80
-HEALTHCHECK --interval=10s --timeout=3s CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+HEALTHCHECK --interval=10s --timeout=3s CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1/play/"]

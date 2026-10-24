@@ -35,9 +35,19 @@ jobs:
       - run: npm run lint
       - run: npx vite build
 
+  compose:
+    name: The compose file (the whole site's services)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # every service, with the optional ones (profiles); the other repositories'
+      # build contexts need not be here to check the file
+      - run: docker compose --profile mail --profile rabbitmq config --quiet
+      - run: docker compose config --services
+
   deploy:
     name: Deploy to the server
-    needs: check
+    needs: [check, compose]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: production

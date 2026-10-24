@@ -1,4 +1,7 @@
-// HTTP client for BalatroWebAPI.
+// HTTP client for BalatroWebAPI. With sign-in on, every request carries the
+// player's access token (session.ts); a refused token is refreshed once, and a
+// player without a session goes to the portal's sign-in page.
+import { access_token, go_to_sign_in, refresh_session } from './session';
 import type {
   ActionResult, GameSummaryView, GameView, HandPreview, NewGameRequest, PlayerAction, ProblemDetails,
 } from './types';
@@ -22,12 +25,27 @@ export function api_base(): string {
   return (env ?? '').replace(/\/$/, '');
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${api_base()}/api/v1${path}`, {
+function send(method: string, path: string, body: unknown, token: string | null): Promise<Response> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  if (token) headers.authorization = `Bearer ${token}`;
+  return fetch(`${api_base()}/api/v1${path}`, {
     method,
-    headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const token = await access_token();
+  let res = await send(method, path, body, token);
+  if (res.status === 401) {
+    // expired or revoked meanwhile: one refresh, then sign in again
+    const fresh = token ? await refresh_session(token) : null;
+    if (!fresh) go_to_sign_in();
+    res = await send(method, path, body, fresh.access_token);
+    if (res.status === 401) go_to_sign_in();
+  }
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   const json = text ? JSON.parse(text) : null;
@@ -39,7 +57,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-  health: () => request<{ status: string; api_version: string; engine_version: string; game_version: string }>('GET', '/health'),
+  health: () => request<{ status: string; api_version: string; engine_version: string; game_version: string; auth?: 'required' | 'off' }>('GET', '/health'),
   newGame: (req: NewGameRequest) => request<GameView>('POST', '/games', req),
   listGames: (limit = 50, offset = 0) => request<GameSummaryView[]>('GET', `/games?limit=${limit}&offset=${offset}`),
   getGame: (id: string) => request<GameView>('GET', `/games/${id}`),

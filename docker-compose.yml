@@ -1,38 +1,69 @@
-# Balatro in the browser: the front end (BalatroFrontEnd) and the API
-# (BalatroWebAPI, with BalatroEngine).
+# Balatro in the browser, everything together:
 #
-# Lives in BalatroFrontEnd, next to ../BalatroWebAPI and ../balatro_src:
+#   portal    the front door (BalatroPortal): the portal at /, and nginx passes
+#             /play/ to web, /api/ to api and /identity/ to identity
+#   web       the game (this repository) at /play/
+#   api       the game API (BalatroWebAPI, with BalatroEngine)
+#   identity  accounts and sign-in (BalatroIndentityService), with its
+#             PostgreSQL (identity-db) and Redis (identity-redis)
+#
+# and, only when their profile is asked for (docker compose --profile <name> up):
+#   mailpit   (profile mail) catches the identity service's emails; read them at
+#             http://localhost:8025. Use it with EMAIL_BACKEND=smtp SMTP_HOST=mailpit
+#             SMTP_PORT=1025 SMTP_SECURITY=none
+#   rabbitmq  (profile rabbitmq) for EMAIL_BACKEND=rabbitmq: the identity service
+#             publishes its emails there for a mail worker (none is included);
+#             management UI at http://localhost:15672
+#
+# The game engine (BalatroEngine) is a library inside the api image, not a service.
+#
+# Lives in BalatroFrontEnd, next to ../BalatroPortal, ../BalatroWebAPI,
+# ../BalatroIndentityService and ../balatro_src (a copy of the game):
 #
 #   docker compose up --build        # then open http://localhost:8087
 #
-# The front end's build reads the game's own files (textures, sounds, shaders,
-# data, font) from a copy of the game in ../balatro_src; they go into the image,
-# not into either repository.
+# The game's build reads the game's own files (textures, sounds, shaders, data,
+# font) from ../balatro_src; they go into the image, not into any repository.
 #
-# Settings (environment or a .env file next to this one):
-#   WEB_PORT                     the front end's port (8087)
-#   API_URL                      the API's public base URL, with or without a path: the
-#                                browser calls <API_URL>/api/v1/... (default: the page's
-#                                own /api/, which goes to the api service below)
-#   API_PORT                     the API's port on this machine, docs at /docs (8000)
+# Settings (environment, or a .env file next to this one, which deployments keep):
+#   WEB_PORT                     the site's port (8087)
+#   PUBLIC_URL                   the site's public origin, as players type it
+#                                (http://localhost:8087): the tokens' issuer is
+#                                <PUBLIC_URL>/identity, Google's redirect <PUBLIC_URL>/auth/callback
+#   API_URL                      the API's public base URL if it isn't this site's /api/
+#   API_PORT, IDENTITY_PORT      the API's and identity service's ports on this machine (8000, 8001)
 #   BALATRO_API_DEBUG_COMMANDS   1 to allow the API's test helpers (off)
+#   BALATRO_API_AUTH_JWKS_URL    empty to run the API without sign-in (everyone is one player)
+#   IDENTITY_DB_PASSWORD         the identity database's password (set it on a server)
+#   EMAIL_BACKEND, EMAIL_FROM, SMTP_*   how the identity service sends its emails
+#                                (console by default: the codes are in `docker compose logs identity`)
+#   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET   Google sign-in (off when unset)
+#   IDENTITY_DB_PORT, IDENTITY_REDIS_PORT    the identity database's and Redis's ports on
+#                                this machine (55432, 56379), for the identity
+#                                service run outside Docker (its `make run`)
+#   RABBITMQ_PASSWORD            RabbitMQ's password (profile rabbitmq)
+#   MAILPIT_PORT, MAILPIT_SMTP_PORT, RABBITMQ_PORT, RABBITMQ_UI_PORT   their ports on this
+#                                machine (8025, 1025, 5672, 15672)
 name: balatro
 
 services:
-  api:
+  portal:
     build:
-      context: ../BalatroWebAPI
-      # downloads (apt, uv, the engine from GitHub) go through this machine's own
-      # connection: Docker's bridge (MTU 1500) stalls behind a VPN tunnel with a
-      # smaller MTU (WireGuard: 1420)
-      network: host
+      context: ../BalatroPortal
+      network: host # downloads through this machine's connection (VPNs, see api)
     environment:
-      BALATRO_API_DATABASE: /data/balatro.db
-      BALATRO_API_DEBUG_COMMANDS: ${BALATRO_API_DEBUG_COMMANDS:-0}
-    volumes:
-      - runs:/data # the runs (SQLite), kept between restarts
+      GAME_UPSTREAM: http://web:80
+      API_UPSTREAM: http://api:8000
+      IDENTITY_UPSTREAM: http://identity:8000
     ports:
-      - "127.0.0.1:${API_PORT:-8000}:8000"
+      - "${WEB_PORT:-8087}:80"
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
     restart: unless-stopped
 
   web:
@@ -45,14 +76,124 @@ services:
         # the browser calls the API there (by default, /api on the page's own origin)
         VITE_API_URL: ${API_URL:-}
     environment:
-      # and the page's own /api/ goes there too
+      # where the game container's own /api/ goes (when it is opened without the portal)
       API_UPSTREAM: ${API_URL:-http://api:8000}
-    ports:
-      - "${WEB_PORT:-8087}:80"
     depends_on:
       api:
         condition: service_healthy
     restart: unless-stopped
 
+  api:
+    build:
+      context: ../BalatroWebAPI
+      # downloads (apt, uv, the engine from GitHub) go through this machine's own
+      # connection: Docker's bridge (MTU 1500) stalls behind a VPN tunnel with a
+      # smaller MTU (WireGuard: 1420)
+      network: host
+    environment:
+      BALATRO_API_DATABASE: /data/balatro.db
+      BALATRO_API_DEBUG_COMMANDS: ${BALATRO_API_DEBUG_COMMANDS:-0}
+      # sign-in: the identity service's keys, and who signs the tokens (its PUBLIC_URL)
+      BALATRO_API_AUTH_JWKS_URL: ${BALATRO_API_AUTH_JWKS_URL-http://identity:8000/.well-known/jwks.json}
+      BALATRO_API_AUTH_ISSUER: ${PUBLIC_URL:-http://localhost:8087}/identity
+      BALATRO_API_CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:8087}
+    volumes:
+      - runs:/data # the runs (SQLite), kept between restarts
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    restart: unless-stopped
+
+  identity:
+    build:
+      context: ../BalatroIndentityService
+      network: host
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8087}/identity
+      CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:8087}
+      OAUTH_REDIRECT_URIS: ${PUBLIC_URL:-http://localhost:8087}/auth/callback
+      DATABASE_URL: postgresql+asyncpg://identity:${IDENTITY_DB_PASSWORD:-identity}@identity-db:5432/identity
+      REDIS_URL: redis://identity-redis:6379/0
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-console}
+      EMAIL_FROM: ${EMAIL_FROM:-Balatro <no-reply@localhost>}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      RABBITMQ_URL: amqp://balatro:${RABBITMQ_PASSWORD:-balatro}@rabbitmq:5672/
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      - identity-data:/data # the JWT signing key
+    ports:
+      - "127.0.0.1:${IDENTITY_PORT:-8001}:8000"
+    depends_on:
+      identity-db:
+        condition: service_healthy
+      identity-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  identity-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: identity
+      POSTGRES_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity}
+      POSTGRES_DB: identity
+    volumes:
+      - identity-db:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${IDENTITY_DB_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identity -d identity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  identity-redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"] # sessions survive a restart
+    volumes:
+      - identity-redis:/data
+    ports:
+      - "127.0.0.1:${IDENTITY_REDIS_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    profiles: ["mail"]
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025" # the inbox, in a browser
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025" # SMTP, for the identity service run outside Docker
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    profiles: ["rabbitmq"]
+    environment:
+      RABBITMQ_DEFAULT_USER: balatro
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-balatro}
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672" # AMQP, for the identity service run outside Docker
+      - "127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   runs:
+  identity-data:
+  identity-db:
+  identity-redis:
+  rabbitmq:

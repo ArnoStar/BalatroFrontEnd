@@ -5,7 +5,8 @@ import { love, loadImage, loadFont, loadShader } from '@/shared/lib/love';
 import { init_localization } from '@/shared/lib/localization';
 import { load_game_data, init_profile, load_settings } from '@/shared/config';
 
-const RES = '/resources';
+// (the game is served under a base path: /play/)
+const RES = `${import.meta.env.BASE_URL}resources`;
 
 const COLLABS = ['AU', 'TW', 'VS', 'DTD', 'CYP', 'STS', 'TBoI', 'SV', 'SK', 'DS', 'CL', 'D2', 'PC', 'WF', 'EG', 'XR', 'CR', 'BUG', 'FO', 'DBD', 'C7', 'R', 'AC', 'STP'];
 
@@ -68,7 +69,7 @@ async function set_render_settings(progress: (p: number) => void) {
 }
 
 async function set_language() {
-  const font = await loadFont('/fonts', 'm6x11plus');
+  const font = await loadFont(`${import.meta.env.BASE_URL}fonts`, 'm6x11plus');
   G.FONTS = [
     { file: 'resources/fonts/m6x11plus.ttf', render_scale: G.TILESIZE * 10, TEXT_HEIGHT_SCALE: 0.83, TEXT_OFFSET: { x: 10, y: -20 }, FONTSCALE: 0.1, squish: 1, DESCSCALE: 1, FONT: font },
   ];

@@ -10,6 +10,12 @@ those events in time with its port of the game's animations.
 
 The code is organised with [Feature-Sliced Design](https://feature-sliced.design).
 
+The game is served at `/play/`. Everything around it is
+[BalatroPortal](../BalatroPortal): signing in, the account, the player's runs,
+and later leaderboards and lobbies. The portal is at `/` on the same origin,
+so both share the player's session. Accounts and tokens come from
+[BalatroIndentityService](../BalatroIndentityService).
+
 ## Run it
 
 You need Node 20+, a copy of Balatro's files (the unpacked game, as in
@@ -33,32 +39,72 @@ once), and the API.
    cd ../BalatroWebAPI && uv run balatro-api        # http://127.0.0.1:8000
    ```
 
-3. Start the front end:
+3. Start the game:
 
    ```
-   npm run dev                                       # http://localhost:5173
+   npm run dev                                       # http://localhost:5173/play/
    ```
 
-   The dev server proxies `/api` to `http://127.0.0.1:8000` (`BALATRO_API=...`
-   to change it). A built front end (`npm run build`, then serve `dist/`) calls
-   the API at `VITE_API_URL` (set at build time) or at the page's
-   `?api=http://host:port` parameter.
+   The dev server proxies `/api` to `http://127.0.0.1:8000` and `/identity` to
+   `http://127.0.0.1:8001` (`BALATRO_API=...`, `BALATRO_IDENTITY=...` to change
+   them). A built game (`npm run build`, served at `/play/`) calls the API at
+   `VITE_API_URL` (set at build time) or at the page's `?api=http://host:port`
+   parameter.
+
+### Signing in
+
+When the API runs with sign-in (its `/health` says `"auth": "required"`), the
+game needs a signed-in player. Without a session, it sends the player to the
+portal's `/login?next=/play/...`, which sends them back afterwards. In
+development, run the identity service and the portal too, and open the game
+through the portal, at http://localhost:5174/play/ (see BalatroPortal's
+README).
+
+With the API's default, sign-in off, nothing changes: the game works on its
+own at http://localhost:5173/play/, everyone is the same player, and the
+frame-by-frame tools below need no account.
+
+`src/shared/api/session.ts` reads the shared session
+(`localStorage['balatro.session']`). It refreshes the access token under a
+lock shared by every tab, and the API client adds the token to each request
+and retries once after a refresh on a 401. The portal has the same file, so
+keep the two in step. In the main menu's profile, a signed-in player sees
+their account's name, with ACCOUNT (the portal's account page) and LOG OUT
+buttons, in place of the local name field.
 
 ## Run it with Docker
 
-`docker-compose.yml` builds and starts the front end and the API, with this
-project next to `../BalatroWebAPI` and the game in `../balatro_src`:
+`docker-compose.yml` builds and starts the whole site. It expects this project
+next to `../BalatroPortal`, `../BalatroWebAPI`, `../BalatroIndentityService`,
+and the game in `../balatro_src`:
 
 ```
 docker compose up --build                         # http://localhost:8087
 ```
 
-The front end's image runs `npm run assets` itself (LuaJIT and LÖVE are in the
-build stage), reading the game from `balatro_src` (the build context `game`),
-and serves the built app with nginx, passing `/api/` to the API container.
-Runs are kept in the `runs` volume. `WEB_PORT`, `API_URL`, `API_PORT` and
-`BALATRO_API_DEBUG_COMMANDS` change the defaults (see the file). Builds use the
-host's network, so they also download behind a VPN.
+| Service | |
+|---|---|
+| `portal` | the front door on `WEB_PORT`: the portal at `/`, and nginx passes `/play/`, `/api/` and `/identity/` on |
+| `web` | the game, at `/play/` |
+| `api` | the game API, with sign-in on (it checks the identity service's tokens) |
+| `identity`, `identity-db`, `identity-redis` | accounts and sign-in, with PostgreSQL and Redis |
+| `mailpit` (`--profile mail`) | catches the identity service's emails: http://localhost:8025 (with `EMAIL_BACKEND=smtp SMTP_HOST=mailpit SMTP_PORT=1025 SMTP_SECURITY=none`) |
+| `rabbitmq` (`--profile rabbitmq`) | the broker for `EMAIL_BACKEND=rabbitmq` (a mail worker must read its queue) |
+
+This is the only compose file of the project: the identity service's `make
+services` also starts its database and Redis from it. Those are published on
+`127.0.0.1:55432` and `:56379` for the identity service run outside Docker.
+The engine (BalatroEngine) is a library inside the `api` image, not a service.
+
+The game's image runs `npm run assets` itself (LuaJIT and LÖVE are in the
+build stage), reading the game from `balatro_src` (the build context `game`).
+Runs are kept in the `runs` volume, accounts in `identity-db`, and the token
+signing key in `identity-data`. `WEB_PORT`, `PUBLIC_URL` (the site's public
+origin, which the tokens' issuer depends on), `API_URL`, `API_PORT`,
+`BALATRO_API_DEBUG_COMMANDS`, `IDENTITY_DB_PASSWORD`, the identity service's
+email settings and Google keys change the defaults (see the file). Emails go
+to `docker compose logs identity` by default. Builds use the host's network,
+so they also download behind a VPN.
 
 Fonts rendered in the container differ from a dump made with another FreeType
 by one pixel on six accented letters (Ã Ñ Õ ã ñ õ), which English text never
@@ -68,11 +114,14 @@ uses.
 
 `.github/workflows/ci-cd.yml` checks every push and pull request on `main`
 and `dev` (typecheck, lint, build, with a stand-in for the game's data). A push
-or a merge to `main` then deploys: the code is copied to the server over SSH
-and `docker compose up -d --build web` rebuilds the image there, since the
-server has the copy of the game it is made from. The job waits until the new
-container is healthy; a failed build leaves the running one in place.
-BalatroWebAPI's workflow deploys the API the same way.
+or a merge to `main` then deploys: the code is copied to the server over SSH,
+and `docker compose up -d --build web portal` rebuilds the images there, since
+the server has the copy of the game they are made from. It starts the identity
+service too. The job waits until both are healthy and the portal reaches
+`/play/`, `/api/` and `/identity/`. A failed build leaves the running
+containers in place. BalatroWebAPI, BalatroIndentityService and BalatroPortal
+deploy themselves the same way, each rebuilding its own service with this
+compose file.
 
 The server (Ubuntu), once:
 
@@ -85,8 +134,12 @@ The server (Ubuntu), once:
    with the deploy key's public half in `~deploy/.ssh/authorized_keys`.
 3. `/opt/balatro`, owned by that user, with the game in
    `/opt/balatro/balatro_src` (e.g. `rsync -a balatro_src/ deploy@server:/opt/balatro/balatro_src/`).
-4. Optionally `/opt/balatro/BalatroFrontEnd/.env` (`WEB_PORT=80`...), which
-   deployments keep.
+4. `/opt/balatro/BalatroFrontEnd/.env`, which deployments keep, with at least
+   `PUBLIC_URL` (the site's address as players type it, e.g.
+   `https://balatro.example.com`) and `IDENTITY_DB_PASSWORD`. For real email,
+   add `EMAIL_BACKEND=smtp` and the `SMTP_*` settings; for Google sign-in, add
+   `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (see the identity service's
+   README). Optionally `WEB_PORT=80`.
 
 The secrets, in both repositories (Settings → Secrets and variables →
 Actions → New repository secret):
@@ -101,9 +154,14 @@ Actions → New repository secret):
 | `DEPLOY_PATH` | optional, the folder on the server (`/opt/balatro`) |
 | `API_URL` | optional, the API's public base URL, with or without a path: the browser calls `<API_URL>/api/v1/...` (e.g. `https://example.com/api` when a reverse proxy sends `/api/...` to the API without the `/api`). By default the page's own `/api/`, which goes to the API deployed next to it |
 
-Until they are set, the deploy job is skipped with a warning. The first time,
-deploy BalatroWebAPI, then this repository (Actions → CI/CD → Run workflow,
-on `main`): the API's deployment copies its code, the front end's starts both.
+The `DEPLOY_*` secrets go in all four repositories (BalatroFrontEnd,
+BalatroWebAPI, BalatroIndentityService, BalatroPortal). Until they are set,
+the deploy job is skipped with a warning. The first time, and whenever a new
+service is added to the compose file, deploy BalatroWebAPI,
+BalatroIndentityService and BalatroPortal first (Actions → CI/CD → Run
+workflow, on `main`). Their deployments only copy their code until this
+repository's compose file runs them. Then deploy this repository: it starts
+everything.
 
 ## How it works
 
@@ -144,13 +202,13 @@ src/
 
 - `tools/love/refshot/run.sh <script.lua> <out>` runs the real game headless
   (fixed 60 fps, scripted clicks or Lua, screenshots at 2560x1440).
-- `node scripts/shot.mjs "http://localhost:5173/?test" out.png ...` steps the
+- `node scripts/shot.mjs "http://localhost:5173/play/?test" out.png ...` steps the
   front end frame by frame (`window.__test.step(n)`) and takes the same shots.
 - `tools/oracle/oracle.py <scenario.py>` plays a scenario with the engine and
   prints when the game runs each queued event, its state changes and the API's
   events, to compare an action's choreography with, frame by frame (see the
   file for how to run it).
-- `node scripts/bot.mjs "http://localhost:5173/?test" 80` plays a run through
+- `node scripts/bot.mjs "http://localhost:5173/play/?test" 80` plays a run through
   the front end's buttons and reports runtime errors (needs the API with
   `BALATRO_API_DEBUG_COMMANDS=1`).
 
@@ -160,7 +218,9 @@ src/
 
 - English only, one profile, everything unlocked and discovered. The profile's
   stats (high scores, card usage, wins) and settings are kept in the browser.
-- Runs live in the API: "Continue" opens the most recent unfinished run.
+  With sign-in, the profile's name is the account's display name.
+- Runs live in the API, one list per player: "Continue" opens the player's
+  most recent unfinished run.
 - The API gives a few texts as meanings, not words: a joker's message (e.g.
   "Safe!", "Upgrade!") is rebuilt from the joker's name.
 - Face-down cards are never revealed by the API: a face-down card played from

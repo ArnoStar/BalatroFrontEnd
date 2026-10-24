@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The server's part of .github/deploy.sh (run there through ssh): rebuilds and
-# restarts the web service with docker compose, waits until it is healthy, and
-# checks that its /api/ reaches the API.
+# restarts the game (web) and the site's front door (portal, which also starts
+# the identity service) with docker compose, waits until they are healthy, and
+# checks that the portal reaches the game, the API and the identity service.
 #   deploy-remote.sh <root> [api_url]
 # api_url: where /api/ goes, an API's base URL, with or without a path (the
 # API_URL secret); empty: the server's .env, or the compose file's API service.
@@ -13,9 +14,9 @@ api_url="${2:-}"
 exec 9>"$root/.deploy.lock"
 flock 9
 
-for d in BalatroWebAPI balatro_src; do
+for d in BalatroWebAPI BalatroIndentityService BalatroPortal balatro_src; do
   if [ ! -d "$root/$d" ]; then
-    echo "::error::$root/$d is missing on the server (deploy BalatroWebAPI first; copy the game to balatro_src)"
+    echo "::error::$root/$d is missing on the server (deploy BalatroWebAPI, BalatroIndentityService and BalatroPortal first; copy the game to balatro_src)"
     exit 1
   fi
 done
@@ -33,26 +34,31 @@ else
 fi
 
 cd "$root/BalatroFrontEnd"
-docker compose up -d --build web
-cid="$(docker compose ps -q web)"
-status=starting
-for _ in $(seq 90); do
-  status="$(docker inspect -f '{{.State.Health.Status}}' "$cid")"
-  [ "$status" = healthy ] && break
-  [ "$status" = unhealthy ] && break
-  sleep 2
+docker compose up -d --build web portal
+for service in web portal; do
+  cid="$(docker compose ps -q "$service")"
+  status=starting
+  for _ in $(seq 90); do
+    status="$(docker inspect -f '{{.State.Health.Status}}' "$cid")"
+    [ "$status" = healthy ] && break
+    [ "$status" = unhealthy ] && break
+    sleep 2
+  done
+  if [ "$status" != healthy ]; then
+    docker compose ps
+    docker compose logs --tail 80 "$service" api identity
+    echo "::error::the $service service is $status"
+    exit 1
+  fi
 done
 docker compose ps
-if [ "$status" != healthy ]; then
-  docker compose logs --tail 80 web api
-  echo "::error::the web service is $status"
-  exit 1
-fi
 
-# the API, through the front end
-if ! docker compose exec -T web wget -q -O /dev/null http://127.0.0.1/api/v1/health; then
-  docker compose logs --tail 40 web
-  echo "::error::the front end is up, but its /api/ does not reach the API (API_URL)"
-  exit 1
-fi
+# the other parts, through the front door
+for path in /play/ /api/v1/health /identity/health; do
+  if ! docker compose exec -T portal wget -q -O /dev/null "http://127.0.0.1$path"; then
+    docker compose logs --tail 40 portal
+    echo "::error::the portal is up, but its $path does not answer"
+    exit 1
+  fi
+done
 docker image prune -f > /dev/null
