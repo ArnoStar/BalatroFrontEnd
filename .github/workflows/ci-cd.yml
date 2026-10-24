@@ -68,4 +68,5 @@ jobs:
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          API_URL: ${{ secrets.API_URL }}
         run: .github/deploy.sh
