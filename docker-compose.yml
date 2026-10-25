@@ -3,7 +3,8 @@
 #   portal    the front door (BalatroPortal): the portal at /, and nginx passes
 #             /play/ to web, /api/ to api and /identity/ to identity
 #   web       the game (this repository) at /play/
-#   api       the game API (BalatroWebAPI, with BalatroEngine)
+#   api       the game API (BalatroWebAPI, with BalatroEngine), with its
+#             PostgreSQL (api-db): the runs and their statistics
 #   identity  accounts and sign-in (BalatroIndentityService), with its
 #             PostgreSQL (identity-db) and Redis (identity-redis)
 #   notification  sends the emails (BalatroNotificationService): the identity
@@ -36,6 +37,9 @@
 #   BALATRO_API_DEBUG_COMMANDS   1 to allow the API's test helpers (off)
 #   BALATRO_API_AUTH_JWKS_URL    empty to run the API without sign-in (everyone is one player)
 #   IDENTITY_DB_PASSWORD         the identity database's password (set it on a server)
+#   API_DB_PASSWORD              the API database's password (set it on a server)
+#   API_DB_PORT                  the API database's port on this machine (55433), for
+#                                the API run outside Docker (its `make db`, `make run`)
 #   EMAIL_BACKEND, EMAIL_FROM, SMTP_*   how the notification service sends the emails
 #                                (console by default: they are in `docker compose logs notification`)
 #   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET   Google sign-in (off when unset)
@@ -93,16 +97,39 @@ services:
       # smaller MTU (WireGuard: 1420)
       network: host
     environment:
-      BALATRO_API_DATABASE: /data/balatro.db
+      BALATRO_API_DATABASE_URL: postgresql://balatro:${API_DB_PASSWORD:-balatro}@api-db:5432/balatro
       BALATRO_API_DEBUG_COMMANDS: ${BALATRO_API_DEBUG_COMMANDS:-0}
       # sign-in: the identity service's keys, and who signs the tokens (its PUBLIC_URL)
       BALATRO_API_AUTH_JWKS_URL: ${BALATRO_API_AUTH_JWKS_URL-http://identity:8000/.well-known/jwks.json}
       BALATRO_API_AUTH_ISSUER: ${PUBLIC_URL:-http://localhost:8087}/identity
       BALATRO_API_CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:8087}
     volumes:
-      - runs:/data # the runs (SQLite), kept between restarts
+      # the SQLite file the API used before PostgreSQL (/data/balatro.db): copy
+      # its runs once with `docker compose exec api python -m balatro_api.manage
+      # import-sqlite /data/balatro.db`
+      - runs:/data
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      api-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: balatro
+      POSTGRES_PASSWORD: ${API_DB_PASSWORD:-balatro}
+      POSTGRES_DB: balatro
+    volumes:
+      - api-db:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${API_DB_PORT:-55433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U balatro -d balatro"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   identity:
@@ -216,6 +243,7 @@ services:
 
 volumes:
   runs:
+  api-db:
   identity-data:
   identity-db:
   identity-redis:

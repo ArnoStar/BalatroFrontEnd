@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The server's part of .github/deploy.sh (run there through ssh): rebuilds and
-# restarts the game (web) and the site's front door (portal, which also starts
-# the identity service) with docker compose, waits until they are healthy, and
+# restarts the game (web), the API (api, with its database api-db) and the
+# site's front door (portal, which also starts the identity service) with
+# docker compose, waits until they are healthy, and
 # checks that the portal reaches the game, the API and the identity service.
 #   deploy-remote.sh <root> [api_url]
 # api_url: where /api/ goes, an API's base URL, with or without a path (the
@@ -34,8 +35,8 @@ else
 fi
 
 cd "$root/BalatroFrontEnd"
-docker compose up -d --build web portal notification
-for service in web portal notification; do
+docker compose up -d --build api web portal notification
+for service in api web portal notification; do
   cid="$(docker compose ps -q "$service")"
   status=starting
   for _ in $(seq 90); do

@@ -121,7 +121,7 @@ docker compose up --build                         # http://localhost:8087
 |---|---|
 | `portal` | the front door on `WEB_PORT`: the portal at `/`, and nginx passes `/play/`, `/api/` and `/identity/` on |
 | `web` | the game, at `/play/` |
-| `api` | the game API, with sign-in on (it checks the identity service's tokens) |
+| `api`, `api-db` | the game API, with sign-in on (it checks the identity service's tokens), and its PostgreSQL (runs and statistics) |
 | `identity`, `identity-db`, `identity-redis` | accounts and sign-in, with PostgreSQL and Redis |
 | `notification` | sends the emails (BalatroNotificationService): the identity service hands it the codes through `rabbitmq` |
 | `rabbitmq` | the message broker between them (UI on `127.0.0.1:15672`) |
@@ -129,15 +129,16 @@ docker compose up --build                         # http://localhost:8087
 
 This is the only compose file of the project: the identity service's `make
 services` also starts its database and Redis from it. Those are published on
-`127.0.0.1:55432` and `:56379` for the identity service run outside Docker.
+`127.0.0.1:55432` and `:56379` for the identity service run outside Docker,
+and the API's `make db` starts `api-db` (on `127.0.0.1:55433`).
 The engine (BalatroEngine) is a library inside the `api` image, not a service.
 
 The game's image runs `npm run assets` itself (LuaJIT and LÖVE are in the
 build stage), reading the game from `balatro_src` (the build context `game`).
-Runs are kept in the `runs` volume, accounts in `identity-db`, and the token
+Runs are kept in `api-db`, accounts in `identity-db`, and the token
 signing key in `identity-data`. `WEB_PORT`, `PUBLIC_URL` (the site's public
 origin, which the tokens' issuer depends on), `API_URL`, `API_PORT`,
-`BALATRO_API_DEBUG_COMMANDS`, `IDENTITY_DB_PASSWORD`, the identity service's
+`BALATRO_API_DEBUG_COMMANDS`, `API_DB_PASSWORD`, `IDENTITY_DB_PASSWORD`, the identity service's
 email settings and Google keys change the defaults (see the file). Emails go
 to `docker compose logs identity` by default. Builds use the host's network,
 so they also download behind a VPN.
@@ -172,7 +173,7 @@ The server (Ubuntu), once:
    `/opt/balatro/balatro_src` (e.g. `rsync -a balatro_src/ deploy@server:/opt/balatro/balatro_src/`).
 4. `/opt/balatro/BalatroFrontEnd/.env`, which deployments keep, with at least
    `PUBLIC_URL` (the site's address as players type it, e.g.
-   `https://balatro.example.com`) and `IDENTITY_DB_PASSWORD`. For real email,
+   `https://balatro.example.com`), `API_DB_PASSWORD` and `IDENTITY_DB_PASSWORD`. For real email,
    add `EMAIL_BACKEND=smtp` and the `SMTP_*` settings (the notification service
    uses them), and set `RABBITMQ_PASSWORD`; for Google sign-in, add
    `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (see the identity service's
@@ -200,6 +201,16 @@ BalatroIndentityService, BalatroNotificationService and BalatroPortal first (Act
 workflow, on `main`). Their deployments only copy their code until this
 repository's compose file runs them. Then deploy this repository: it starts
 everything.
+
+The API kept its runs in a SQLite file (the `runs` volume) before it moved to
+PostgreSQL (`api-db`). On a server that ran the earlier version, copy them
+once after the deployment, in `/opt/balatro/BalatroFrontEnd`:
+
+```
+docker compose exec api python -m balatro_api.manage import-sqlite /data/balatro.db
+```
+
+Runs already copied are skipped, so running it again does no harm.
 
 ## How it works
 
