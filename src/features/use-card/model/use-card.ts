@@ -418,20 +418,46 @@ export function register_use_card_funcs() {
     e.config.button = ok ? 'skip_booster' : null;
   };
 
-  /** CardArea dragging ended: a reorder of the jokers or the hand is a `move` */
+  /** CardArea dragging ended: a reorder of the jokers, the hand or the
+   *  consumables is a `move`. The card's new place is kept as "after this
+   *  card" so a drag that ends while an action plays can still be sent once
+   *  it's done (its finish puts the API's order back first). */
   G.FUNCS.card_drag_ended = (card: Card) => {
     const area = card.area;
     if (!area || card.api_id === undefined || (area !== G.jokers && area !== G.hand && area !== G.consumeables)) return;
-    const to = area.cards.indexOf(card);
-    const list = area === G.jokers ? run.view?.jokers : area === G.hand ? run.view?.hand : run.view?.consumables;
-    const from = list?.findIndex((c) => c.id === card.api_id) ?? -1;
-    if (to < 0 || from < 0 || from === to) return;
-    if (!legal('move', card.api_id).length) return;
-    perform({ type: 'move', card: card.api_id, to });
+    const i = area.cards.indexOf(card);
+    if (i < 0) return;
+    const after: number | null = i > 0 ? area.cards[i - 1].api_id ?? null : null;
+    send_move(area === G.jokers ? 'jokers' : area === G.hand ? 'hand' : 'consumables', card.api_id, after);
   };
 
   G.UIDEF.use_and_sell_buttons = use_and_sell_buttons;
   void sync_game;
+}
+
+/** move a card of the jokers/hand/consumables right after another one (null: first) */
+function send_move(area: 'jokers' | 'hand' | 'consumables', id: number, after: number | null) {
+  if (run.busy) {
+    G.E_MANAGER.add_event(new Event({
+      blocking: false, blockable: false,
+      func: () => {
+        if (run.busy) return false;
+        send_move(area, id, after);
+        return true;
+      },
+    }));
+    return;
+  }
+  const list = run.view?.[area];
+  const from = list?.findIndex((c) => c.id === id) ?? -1;
+  if (!list || from < 0) return;
+  const rest = list.filter((c) => c.id !== id);
+  const to = after === null ? 0 : rest.findIndex((c) => c.id === after) + 1;
+  if (to === 0 && after !== null) return; // the card it was put after is gone
+  if (to === from) return;
+  // the API lists `move` once per area that has 2+ cards (not per card)
+  if (!legal('move').some((a) => a.area === area)) return;
+  perform({ type: 'move', card: id, to });
 }
 
 function use_and_sell_buttons(card: Card) {
