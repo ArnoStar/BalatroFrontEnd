@@ -7,6 +7,8 @@
 #             PostgreSQL (api-db): the runs and their statistics
 #   identity  accounts and sign-in (BalatroIndentityService), with its
 #             PostgreSQL (identity-db) and Redis (identity-redis)
+#   reports   bug reports from the game (BalatroBugReportService), with its
+#             PostgreSQL (reports-db); the portal passes /reports/ to it
 #   notification  sends the emails (BalatroNotificationService): the identity
 #             service publishes its confirmation codes to rabbitmq
 #   rabbitmq  the message broker between them (management UI at http://localhost:15672)
@@ -38,6 +40,12 @@
 #   BALATRO_API_AUTH_JWKS_URL    empty to run the API without sign-in (everyone is one player)
 #   IDENTITY_DB_PASSWORD         the identity database's password (set it on a server)
 #   API_DB_PASSWORD              the API database's password (set it on a server)
+#   ADMINS                       account ids (the identity service's, comma-separated) of
+#                                the developers: they read the bug reports and may
+#                                rebuild runs from them in the API
+#   REPORTS_DB_PASSWORD          the reports database's password (set it on a server)
+#   REPORTS_PORT, REPORTS_DB_PORT  the report service's and its database's ports on this
+#                                machine (8003, 55434), for it run outside Docker
 #   API_DB_PORT                  the API database's port on this machine (55433), for
 #                                the API run outside Docker (its `make db`, `make run`)
 #   EMAIL_BACKEND, EMAIL_FROM, SMTP_*   how the notification service sends the emails
@@ -61,6 +69,8 @@ services:
       GAME_UPSTREAM: http://web:80
       API_UPSTREAM: http://api:8000
       IDENTITY_UPSTREAM: http://identity:8000
+      # (not a dependency: the site runs without the report service, /reports/ answers 502)
+      REPORTS_UPSTREAM: http://reports:8000
     ports:
       - "${WEB_PORT:-8087}:80"
     depends_on:
@@ -98,6 +108,7 @@ services:
       network: host
     environment:
       BALATRO_API_DATABASE_URL: postgresql://balatro:${API_DB_PASSWORD:-balatro}@api-db:5432/balatro
+      BALATRO_API_ADMINS: ${ADMINS:-}
       BALATRO_API_DEBUG_COMMANDS: ${BALATRO_API_DEBUG_COMMANDS:-0}
       # sign-in: the identity service's keys, and who signs the tokens (its PUBLIC_URL)
       BALATRO_API_AUTH_JWKS_URL: ${BALATRO_API_AUTH_JWKS_URL-http://identity:8000/.well-known/jwks.json}
@@ -127,6 +138,40 @@ services:
       - "127.0.0.1:${API_DB_PORT:-55433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U balatro -d balatro"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  reports:
+    build:
+      context: ../BalatroBugReportService
+      network: host
+    environment:
+      BALATRO_REPORTS_DATABASE_URL: postgresql://reports:${REPORTS_DB_PASSWORD:-reports}@reports-db:5432/reports
+      BALATRO_REPORTS_ADMINS: ${ADMINS:-}
+      BALATRO_REPORTS_AUTH_JWKS_URL: ${BALATRO_API_AUTH_JWKS_URL-http://identity:8000/.well-known/jwks.json}
+      BALATRO_REPORTS_AUTH_ISSUER: ${PUBLIC_URL:-http://localhost:8087}/identity
+      BALATRO_REPORTS_CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:8087}
+    ports:
+      - "127.0.0.1:${REPORTS_PORT:-8003}:8000"
+    depends_on:
+      reports-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  reports-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: reports
+      POSTGRES_PASSWORD: ${REPORTS_DB_PASSWORD:-reports}
+      POSTGRES_DB: reports
+    volumes:
+      - reports-db:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${REPORTS_DB_PORT:-55434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reports -d reports"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -244,6 +289,7 @@ services:
 volumes:
   runs:
   api-db:
+  reports-db:
   identity-data:
   identity-db:
   identity-redis:

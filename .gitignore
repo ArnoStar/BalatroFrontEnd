@@ -7,3 +7,4 @@ src/shared/config/generated/game.json
 
 # the settings of the whole site in Docker (secrets): see .env.example
 .env
+.build

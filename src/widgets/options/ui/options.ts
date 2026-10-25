@@ -33,6 +33,8 @@ export function create_UIBox_options() {
   const settings = UIBox_button({ button: 'settings', label: [localize('b_settings')], minw: 5, focus_args: { snap_to: true } });
   const high_scores = UIBox_button({ label: [localize('b_stats')], button: 'high_scores', minw: 5 });
   const customize = UIBox_button({ label: [localize('b_customize_deck')], button: 'customize_deck', minw: 5 });
+  // (not in the game: bug reports of this browser version, features/bug-report)
+  const report_bug = UIBox_button({ label: ['Report a bug'], button: 'report_bug', minw: 5, colour: G.C.RED });
   return create_UIBox_generic_options({ contents: [
     settings,
     G.GAME.seeded ? current_seed : null,
@@ -42,6 +44,7 @@ export function create_UIBox_options() {
     your_collection,
     customize,
     credits,
+    report_bug,
   ].filter((x) => x) });
 }
 

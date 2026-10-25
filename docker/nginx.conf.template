@@ -37,6 +37,8 @@ server {
     }
 
     location /play/ {
+        # index.html names the current bundles: browsers ask again each time
+        add_header Cache-Control "no-cache";
         try_files $uri $uri/ /play/index.html;
     }
 

@@ -35,8 +35,11 @@ else
 fi
 
 cd "$root/BalatroFrontEnd"
-docker compose up -d --build api web portal notification
-for service in api web portal notification; do
+services=(api web portal notification)
+# the bug report service, once its code is on the server (its own deployment copies it)
+if [ -d "$root/BalatroBugReportService" ]; then services+=(reports); fi
+docker compose up -d --build "${services[@]}"
+for service in "${services[@]}"; do
   cid="$(docker compose ps -q "$service")"
   status=starting
   for _ in $(seq 90); do

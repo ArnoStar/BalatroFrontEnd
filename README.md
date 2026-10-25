@@ -122,6 +122,7 @@ docker compose up --build                         # http://localhost:8087
 | `portal` | the front door on `WEB_PORT`: the portal at `/`, and nginx passes `/play/`, `/api/` and `/identity/` on |
 | `web` | the game, at `/play/` |
 | `api`, `api-db` | the game API, with sign-in on (it checks the identity service's tokens), and its PostgreSQL (runs and statistics) |
+| `reports`, `reports-db` | the bug reports (BalatroBugReportService), with its PostgreSQL; at `/reports/` |
 | `identity`, `identity-db`, `identity-redis` | accounts and sign-in, with PostgreSQL and Redis |
 | `notification` | sends the emails (BalatroNotificationService): the identity service hands it the codes through `rabbitmq` |
 | `rabbitmq` | the message broker between them (UI on `127.0.0.1:15672`) |
@@ -211,6 +212,37 @@ docker compose exec api python -m balatro_api.manage import-sqlite /data/balatro
 ```
 
 Runs already copied are skipped, so running it again does no harm.
+
+## Bug reports
+
+A player reports a bug from inside the game: Options > **Report a bug**, the
+**F8** key, or the note that appears after an error. The dialog takes a
+screenshot and sends, with the player's words, everything needed to see the
+bug again (to BalatroBugReportService, at `/reports/`):
+
+- **the run's history** (`GET /api/v1/games/{id}/history`): its settings and
+  every command, which rebuild the run exactly (the engine is deterministic);
+- **the game's recording** (`shared/lib/recorder`) of its last 15 minutes:
+  every API request and response with its request id (the API logs each request
+  with it), the player's mouse and keys in game units (`shared/lib/input`, the
+  one way input reaches the game), actions, state changes, warnings and errors;
+- the build (`.build`, written by the deployment, or git), browser, window and
+  settings.
+
+**To see it again**, a developer (an account in `ADMINS`) opens the report in
+the portal (`/bugs`) and clicks *Replay it in the game*, i.e.
+`/play/?report=<id>`: the API rebuilds the run where the recording starts
+(`POST /api/v1/games/import`), the game opens it and replays the player's
+inputs, each after the same number of finished actions and the same delay as
+when it was recorded, frame by frame, up to the moment of the report. A bar
+shows the report, the progress, and where the replay goes another way than the
+player did. `&at=<version>` only opens the run at a version; `&inputs=0` skips
+the inputs. Details: BalatroBugReportService's `docs/recording.md`.
+
+`node scripts/report-e2e.mjs` checks the whole loop on the dev servers (API
+with debug commands, report service without sign-in): it plays a few actions
+with the mouse (a drag included), reports with F8, replays the report in a new
+page, and compares the actions and the final run.
 
 ## How it works
 
