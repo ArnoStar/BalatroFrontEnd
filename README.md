@@ -229,7 +229,8 @@ bug again (to BalatroBugReportService, at `/reports/`):
 - the build (`.build`, written by the deployment, or git), browser, window and
   settings.
 
-**To see it again**, a developer (an account in `ADMINS`) opens the report in
+**To see it again**, a developer (an account with the developer or admin
+role, given in the portal's `/admin`) opens the report in
 the portal (`/bugs`) and clicks *Replay it in the game*, i.e.
 `/play/?report=<id>`: the API rebuilds the run where the recording starts
 (`POST /api/v1/games/import`), the game opens it and replays the player's

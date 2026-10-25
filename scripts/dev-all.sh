@@ -16,8 +16,8 @@
 #   make dev            (scripts/dev-all.sh)
 #   MAIL=1 make dev     emails go to Mailpit instead of the notification service's log
 #   AUTH=0 make dev     the API without sign-in (everyone is one player)
-#   ADMINS=<account id> make dev   who reads the bug reports (/bugs in the portal; with
-#                       AUTH=0, everyone does). An account's id: GET /reports/v1/me
+#   ADMINS=<account id> make dev   developers without the role (roles: the portal's /admin,
+#                       the first admin: `make run`'s identity, python -m app.manage grant)
 #
 # Ctrl-C stops the services it started; the Docker ones keep running
 # (`make down` stops them). Google sign-in works when the identity service's
