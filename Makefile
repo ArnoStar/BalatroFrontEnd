@@ -6,7 +6,7 @@
 # The whole site in Docker, configured by .env (see .env.example):
 #                   make up                                    (http://localhost:8087)
 .DEFAULT_GOAL := help
-.PHONY: help install assets run check build dev up down logs ps restart config
+.PHONY: help install assets run check build dev up down logs ps restart config admin
 
 COMPOSE := docker compose
 
@@ -30,6 +30,9 @@ build: ## the production build in dist/ (npm run build)
 	npm run build
 
 # ---------------------------------------------------------------- the whole site
+admin: ## make an account an admin (it asks for the email; EMAIL=... to give it)
+	@./scripts/make-admin.sh $(EMAIL)
+
 dev: ## everything locally with hot reload; MAIL=1: emails to Mailpit; AUTH=0: no sign-in
 	./scripts/dev-all.sh
 
