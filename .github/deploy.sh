@@ -26,6 +26,8 @@ ssh_cmd="ssh -i $HOME/.ssh/deploy_key -p $port -o BatchMode=yes -o StrictHostKey
 
 $ssh_cmd "$target" "mkdir -p '$root/BalatroFrontEnd'"
 # the code only: what the image generates, and the server's own .env, stay
+# the build's id, which bug reports name (vite.config.ts reads it)
+git rev-parse --short HEAD > .build
 rsync -az --delete -e "$ssh_cmd" \
   --exclude .git --exclude node_modules --exclude dist --exclude .env \
   --exclude public/resources --exclude public/fonts --exclude src/shared/config/generated \

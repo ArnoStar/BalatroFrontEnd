@@ -2,8 +2,9 @@
 // player's access token (session.ts); a refused token is refreshed once, and a
 // player without a session goes to the portal's sign-in page.
 import { access_token, go_to_sign_in, refresh_session } from './session';
+import { recorder } from '@/shared/lib/recorder';
 import type {
-  ActionResult, GameSummaryView, GameView, HandPreview, NewGameRequest, PlayerAction, ProblemDetails,
+  ActionResult, GameSummaryView, GameView, HandPreview, HistoryView, NewGameRequest, PlayerAction, ProblemDetails,
 } from './types';
 
 export class ApiError extends Error {
@@ -25,8 +26,13 @@ export function api_base(): string {
   return (env ?? '').replace(/\/$/, '');
 }
 
-function send(method: string, path: string, body: unknown, token: string | null): Promise<Response> {
-  const headers: Record<string, string> = {};
+/** a request id the API logs with the request (and sends back): bug reports name it */
+function new_request_id() {
+  return `fe-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function send(method: string, path: string, body: unknown, token: string | null, request_id: string): Promise<Response> {
+  const headers: Record<string, string> = { 'x-request-id': request_id };
   if (body !== undefined) headers['content-type'] = 'application/json';
   if (token) headers.authorization = `Bearer ${token}`;
   return fetch(`${api_base()}/api/v1${path}`, {
@@ -38,17 +44,31 @@ function send(method: string, path: string, body: unknown, token: string | null)
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = await access_token();
-  let res = await send(method, path, body, token);
-  if (res.status === 401) {
-    // expired or revoked meanwhile: one refresh, then sign in again
-    const fresh = token ? await refresh_session(token) : null;
-    if (!fresh) go_to_sign_in();
-    res = await send(method, path, body, fresh.access_token);
-    if (res.status === 401) go_to_sign_in();
+  const rid = new_request_id();
+  const started = performance.now();
+  let res: Response;
+  try {
+    res = await send(method, path, body, token, rid);
+    if (res.status === 401) {
+      // expired or revoked meanwhile: one refresh, then sign in again
+      const fresh = token ? await refresh_session(token) : null;
+      if (!fresh) go_to_sign_in();
+      res = await send(method, path, body, fresh.access_token, rid);
+      if (res.status === 401) go_to_sign_in();
+    }
+  } catch (err) {
+    recorder.api(method, path, body ?? null, 0, performance.now() - started, rid, { network_error: String(err) });
+    throw err;
   }
+  const text = res.status === 204 ? '' : await res.text();
+  let json: unknown = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = { not_json: text.slice(0, 500) };
+  }
+  recorder.api(method, path, body ?? null, res.status, performance.now() - started, res.headers.get('x-request-id') ?? rid, json);
   if (res.status === 204) return undefined as T;
-  const text = await res.text();
-  const json = text ? JSON.parse(text) : null;
   if (!res.ok) {
     const p = json && typeof json === 'object' && 'code' in json ? (json as ProblemDetails) : null;
     throw new ApiError(res.status, p, p?.detail ?? `${method} ${path}: ${res.status}`);
@@ -67,4 +87,7 @@ export const api = {
   preview: (id: string, cards: number[]) => request<HandPreview>('POST', `/games/${id}/preview`, { cards }),
   debug: (id: string, command: Record<string, unknown>, expected_version?: number) =>
     request<ActionResult>('POST', `/games/${id}/debug`, { command, expected_version: expected_version ?? null }),
+  history: (id: string) => request<HistoryView>('GET', `/games/${id}/history`),
+  /** a run rebuilt from a history (admins, or servers with debug commands) */
+  importGame: (history: Pick<HistoryView, 'settings' | 'commands'>) => request<GameView>('POST', '/games/import', history),
 };

@@ -10,6 +10,9 @@ import { show_splash } from '@/pages/splash';
 import { main_menu } from '@/pages/main-menu';
 import { run } from '@/entities/run';
 import { SigningIn } from '@/shared/api';
+import { input_state, key_down, key_up, pointer_down, pointer_move, pointer_up } from '@/shared/lib/input';
+import { recorder } from '@/shared/lib/recorder';
+import { register_bug_report_funcs, start_replay_if_asked } from '@/features/bug-report';
 
 const canvas = document.getElementById('screen') as HTMLCanvasElement;
 
@@ -43,63 +46,31 @@ function loading_bar(progress: number) {
   g.present();
 }
 
-const LOVE_KEYS: Record<string, string> = {
-  Escape: 'escape', Enter: 'return', NumpadEnter: 'kpenter', Backspace: 'backspace', Delete: 'delete', Tab: 'tab',
-  ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', ' ': 'space', Shift: 'lshift', CapsLock: 'capslock',
-  Control: 'lctrl', Alt: 'lalt',
-};
-
-function love_key(e: KeyboardEvent) {
-  if (LOVE_KEYS[e.key]) return LOVE_KEYS[e.key];
-  if (e.key.length === 1) return e.key.toLowerCase();
-  return e.key.toLowerCase();
-}
-
 function wire_input() {
   const dpr = () => window.devicePixelRatio || 1;
   const pos = (e: MouseEvent): [number, number] => {
     const r = canvas.getBoundingClientRect();
     return [(e.clientX - r.left) * dpr(), (e.clientY - r.top) * dpr()];
   };
-  canvas.addEventListener('mousemove', (e) => {
-    [love.mouse.x, love.mouse.y] = pos(e);
-    G.CONTROLLER?.set_HID_flags('mouse');
-  });
+  // (during a bug report's replay, the replay is the player)
+  const live = () => !input_state.replaying;
+  canvas.addEventListener('mousemove', (e) => live() && pointer_move(...pos(e)));
   canvas.addEventListener('mousedown', (e) => {
     love.audio.resume();
     canvas.focus();
-    const [x, y] = pos(e);
-    love.mouse.x = x; love.mouse.y = y;
-    G.CONTROLLER.set_HID_flags('mouse');
-    if (e.button === 0) G.CONTROLLER.queue_L_cursor_press(x, y);
-    if (e.button === 2) G.CONTROLLER.queue_R_cursor_press(x, y);
+    if (live()) pointer_down(...pos(e), e.button);
   });
-  window.addEventListener('mouseup', (e) => {
-    if (e.button === 0 && G.CONTROLLER) {
-      const [x, y] = pos(e);
-      G.CONTROLLER.L_cursor_release(x, y);
-    }
-  });
+  window.addEventListener('mouseup', (e) => live() && pointer_up(...pos(e), e.button));
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('keydown', (e) => {
+    if (input_state.blocked || !live()) return;
     love.audio.resume();
     if (!G.CONTROLLER) return;
     if (e.ctrlKey && e.key.toLowerCase() === 'v' && G.CONTROLLER.text_input_hook) return; // paste below
-    const key = love_key(e);
-    G.CONTROLLER.set_HID_flags('mouse');
-    if (G.CONTROLLER.text_input_hook && e.key.length === 1) {
-      // typed characters keep their case and symbols
-      G.CONTROLLER.key_press(e.key);
-    } else {
-      G.CONTROLLER.key_press(key);
-    }
+    key_down(e.key);
     if (['Tab', ' ', 'Backspace', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();
   });
-  window.addEventListener('keyup', (e) => {
-    if (!G.CONTROLLER) return;
-    const key = G.CONTROLLER.text_input_hook && e.key.length === 1 ? e.key : love_key(e);
-    G.CONTROLLER.key_release(key);
-  });
+  window.addEventListener('keyup', (e) => live() && key_up(e.key));
   window.addEventListener('paste', (e) => {
     const text = e.clipboardData?.getData('text') ?? '';
     love.system.setClipboardText(text);
@@ -109,7 +80,18 @@ function wire_input() {
   });
 }
 
+/** G.STATE and G.STAGE changes, for the recording */
+let last_state: unknown = null, last_stage: unknown = null;
+function record_state() {
+  if (G.STATE === last_state && G.STAGE === last_stage) return;
+  const name = (table: Record<string, unknown> | undefined, v: unknown) => Object.keys(table ?? {}).find((k) => table![k] === v) ?? v;
+  recorder.record('state', { state: name(G.STATES, G.STATE), stage: name(G.STAGES, G.STAGE) });
+  last_state = G.STATE;
+  last_stage = G.STAGE;
+}
+
 async function main() {
+  recorder.install();
   await ensure_signed_in();
   fit_canvas();
   initLove(canvas, `${import.meta.env.BASE_URL}resources/sounds`);
@@ -118,8 +100,12 @@ async function main() {
   await start_up((p) => loading_bar(p));
   name_profile();
   register_all();
+  register_bug_report_funcs();
   wire_input();
   show_splash(main_menu);
+  void start_replay_if_asked(); // /play/?report=<id> (it waits for the main menu)
+  // the dev server: the game's objects for scripts (scripts/report-e2e.mjs ...)
+  if (import.meta.env.DEV) (window as any).__game = { G, run, recorder };
 
   let dt_smooth = 1 / 100;
   const tick = (dt: number) => {
@@ -135,8 +121,9 @@ async function main() {
       run,
       frame: 0,
       step(n: number, dt = 1 / 60) {
-        for (let i = 0; i < n; i++) { this.frame++; tick(dt); }
+        for (let i = 0; i < n; i++) { this.frame++; tick(dt); record_state(); }
         game_draw();
+        recorder.after_draw(canvas);
         return this.frame;
       },
     };
@@ -151,7 +138,9 @@ async function main() {
     last = now;
     try {
       tick(dt);
+      record_state();
       game_draw();
+      recorder.after_draw(canvas);
     } catch (err) {
       console.error(err);
     }

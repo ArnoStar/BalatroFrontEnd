@@ -21,7 +21,10 @@ rmSync(out, { recursive: true, force: true });
 for (const dir of ['textures', 'sounds', 'shaders']) {
   cpSync(resolve(src, 'resources', dir), resolve(out, dir), { recursive: true });
 }
-console.log(`copied textures, sounds and shaders to ${out}`);
+// the pixel font itself, for the page's own text (the bug report dialog)
+mkdirSync(resolve(out, 'fonts'), { recursive: true });
+cpSync(resolve(src, 'resources/fonts/m6x11plus.ttf'), resolve(out, 'fonts/m6x11plus.ttf'));
+console.log(`copied textures, sounds, shaders and the font to ${out}`);
 
 mkdirSync(resolve(root, 'src/shared/config/generated'), { recursive: true });
 execFileSync('luajit', [resolve(root, 'tools/lua/extract_ui_data.lua'), resolve(root, 'src/shared/config/generated/game.json')], {

@@ -4,6 +4,7 @@
 import { G, Event } from '@/shared/lib/engine';
 import { api, ApiError, type ActionResult, type GameView, type PlayerAction } from '@/shared/api';
 import { check_and_set_high_score } from '@/shared/config';
+import { recorder } from '@/shared/lib/recorder';
 import { run, set_view } from './store';
 import { Timeline, type TimelineHooks } from './timeline';
 import { sync_game, reconcile_all } from './sync';
@@ -38,7 +39,7 @@ export function finish_action(view: GameView) {
 
 /** a debug helper (POST /debug, development only), played like an action */
 export async function perform_debug(command: Record<string, unknown>, ch: Choreography = {}): Promise<boolean> {
-  return perform({ type: 'debug' } as any, ch, () => api.debug(run.id!, command, run.view!.version));
+  return perform({ type: 'debug', command } as any, ch, () => api.debug(run.id!, command, run.view!.version));
 }
 
 export async function perform(action: PlayerAction, ch: Choreography = {}, send?: () => Promise<ActionResult>): Promise<boolean> {
@@ -48,6 +49,7 @@ export async function perform(action: PlayerAction, ch: Choreography = {}, send?
   // the API's times count from the click
   const click_time = G.TIMERS.REAL;
   const prev = run.view;
+  recorder.record('action', { phase: 'start', type: action.type, action, version: prev.version });
   ch.before?.();
   let result: ActionResult;
   try {
@@ -55,6 +57,7 @@ export async function perform(action: PlayerAction, ch: Choreography = {}, send?
   } catch (err) {
     G.CONTROLLER.locks.api = null;
     run.busy = false;
+    recorder.record('action', { phase: 'refused', type: action.type, error: String(err) });
     ch.refused?.(err);
     if (err instanceof ApiError && err.code === 'illegal_action') {
       console.warn('[api] refused:', err.message);
@@ -82,6 +85,7 @@ export async function perform(action: PlayerAction, ch: Choreography = {}, send?
       if (playing.tl === tl) playing.tl = null;
       finish_action(result.game);
       run.busy = false;
+      recorder.record('action', { phase: 'end', type: action.type, version: result.game.version });
       return true;
     },
   }));

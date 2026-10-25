@@ -116,3 +116,12 @@ export interface ProblemDetails {
   type: string; title: string; status: number; detail: string; code: string;
   expected_version?: number; current_version?: number;
 }
+
+/** GET /games/{id}/history: the run's settings and the engine commands that rebuild it */
+export interface HistoryView {
+  id: string;
+  version: number;
+  engine_version: string;
+  settings: { seed: string; deck: string; stake: number; challenge: string | null; game_speed: number; seeded?: boolean };
+  commands: Record<string, unknown>[];
+}

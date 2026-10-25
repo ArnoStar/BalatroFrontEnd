@@ -3,6 +3,7 @@
 // wipe_off). A new run is created by the API; an open run is fetched.
 import { G, UIBox, DynaText, Particles, Event, HEX, play_sound, delete_run, pseudorandom_element } from '@/shared/lib/engine';
 import { api, type GameView, type NewGameRequest } from '@/shared/api';
+import { recorder } from '@/shared/lib/recorder';
 import { Card } from '@/entities/card';
 import { clear_run } from '@/entities/run';
 
@@ -104,6 +105,8 @@ export function start_run(req: NewGameRequest | null, open_id?: string) {
     func: () => {
       if (got.error) { G.main_menu('game'); return true; }
       if (!got.view) return false;
+      // where a bug report's replay can start: this run, opened at this version
+      recorder.record('run', { id: got.view.id, version: got.view.version });
       G.start_run_page(got.view);
       return true;
     },
