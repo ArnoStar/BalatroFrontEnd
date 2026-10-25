@@ -213,6 +213,22 @@ docker compose exec api python -m balatro_api.manage import-sqlite /data/balatro
 
 Runs already copied are skipped, so running it again does no harm.
 
+## Admins and roles
+
+Accounts can be admins, developers or testers (the identity service's roles:
+see its `docs/integration.md`). Name the first admin here, on this machine or
+on the server (in `/opt/balatro/BalatroFrontEnd`); it asks for the account's
+email (sign up on the site first), shows its roles, and asks before giving the
+role:
+
+```
+make admin                                  # or ./scripts/make-admin.sh [-y] [email]
+```
+
+It uses the identity service of the Docker stack when it runs, or else
+`../BalatroIndentityService` (the `make dev` setup). Admins then give roles in
+the portal (**Accounts**, `/admin`).
+
 ## Bug reports
 
 A player reports a bug from inside the game: Options > **Report a bug**, the
@@ -230,7 +246,7 @@ bug again (to BalatroBugReportService, at `/reports/`):
   settings.
 
 **To see it again**, a developer (an account with the developer or admin
-role, given in the portal's `/admin`) opens the report in
+role, given in the portal's `/admin`; the first admin with `make admin`) opens the report in
 the portal (`/bugs`) and clicks *Replay it in the game*, i.e.
 `/play/?report=<id>`: the API rebuilds the run where the recording starts
 (`POST /api/v1/games/import`), the game opens it and replays the player's
