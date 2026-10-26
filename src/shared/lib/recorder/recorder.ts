@@ -46,6 +46,9 @@ function clip(s: string, n = MAX_TEXT) {
   return s.length > n ? `${s.slice(0, n)}… (${s.length - n} more)` : s;
 }
 
+/** where a browser extension's scripts come from */
+const EXTENSION = /(chrome|moz|safari-web)-extension:\/\//;
+
 function describe(arg: unknown): string {
   if (arg instanceof Error) return arg.stack ?? `${arg.name}: ${arg.message}`;
   if (typeof arg === 'string') return arg;
@@ -124,6 +127,11 @@ class Recorder {
 
   error(message: unknown, source: RecordedError['source'], extra?: unknown) {
     const text = clip(describe(message));
+    // a browser extension's own errors (its scripts run in the page): not the game's
+    if (EXTENSION.test(text) || (extra !== undefined && EXTENSION.test(describe(extra)))) {
+      this.record('log', { level: 'warn', message: clip(`(a browser extension) ${text.split('\n')[0]}`, 300) });
+      return;
+    }
     const err: RecordedError = { t: Math.round(this.now() * 1000) / 1000, message: text.split('\n')[0], source };
     if (text.includes('\n')) err.stack = text;
     if (extra !== undefined) err.stack = clip(`${err.stack ?? ''}\n${describe(extra)}`.trim());

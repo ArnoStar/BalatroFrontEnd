@@ -115,11 +115,18 @@ export function open_report_dialog(screenshot: string | null) {
 
 let toast: HTMLElement | null = null;
 let last_toast = -Infinity;
+let dismissed = false;
+const offered = new Set<string>();
 
-/** after an error: a note offering to report it (at most once a minute) */
-export function offer_report(take_screenshot: () => Promise<string | null>) {
+/**
+ * After an error: a note offering to report it. Once per error (the same
+ * error again, every frame, doesn't ask again), at most once a minute, and
+ * not again after Dismiss (F8 still reports).
+ */
+export function offer_report(take_screenshot: () => Promise<string | null>, message = '') {
   const now = performance.now();
-  if (open_dialog || toast || now - last_toast < 60_000) return;
+  if (dismissed || open_dialog || toast || now - last_toast < 60_000 || offered.has(message)) return;
+  offered.add(message);
   last_toast = now;
   add_style();
   toast = el('div', 'br-toast');
@@ -131,7 +138,7 @@ export function offer_report(take_screenshot: () => Promise<string | null>) {
   dismiss.type = 'button';
   const hide = () => { toast?.remove(); toast = null; };
   report.onclick = async () => { hide(); open_report_dialog(await take_screenshot()); };
-  dismiss.onclick = hide;
+  dismiss.onclick = () => { dismissed = true; hide(); };
   toast.append(report, dismiss);
   document.body.append(toast);
   setTimeout(hide, 15_000);

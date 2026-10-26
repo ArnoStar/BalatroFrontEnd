@@ -49,6 +49,8 @@ export class Timeline {
   next = 0;
   started = false;
   done = false;
+  /** the run it belongs to is gone (a new run, the main menu): it plays nothing more */
+  cancelled = false;
   end_t: number;
   private pre: { t: number; run: () => void }[] = [];
   private pre_next = 0;
@@ -210,7 +212,7 @@ export class Timeline {
    * also past its last event (the time keeps running).
    */
   until(t: number | null | undefined): Event {
-    return new Event({ func: () => !this.started || t === null || t === undefined || this.elapsed >= t });
+    return new Event({ func: () => this.cancelled || !this.started || t === null || t === undefined || this.elapsed >= t });
   }
 
   /** an event that waits until the whole timeline has played */
@@ -222,11 +224,23 @@ export class Timeline {
   at(t: number, f: () => void) {
     G.E_MANAGER.add_event(new Event({
       blocking: false, blockable: false,
-      func: () => { if (this.started && this.elapsed >= t) { f(); return true; } return false; },
+      func: () => {
+        if (this.cancelled) return true;
+        if (this.started && this.elapsed >= t) { f(); return true; }
+        return false;
+      },
     }));
   }
 
+  /** stop playing (its run is gone): its waits end, its events are dropped */
+  cancel() {
+    this.cancelled = true;
+    this.done = true;
+    this.on_done = [];
+  }
+
   private tick(): boolean {
+    if (this.cancelled) return true;
     const now = this.elapsed;
     while (this.pre_next < this.pre.length && this.pre[this.pre_next].t <= now) this.pre[this.pre_next++].run();
     while (this.next < this.events.length && this.events[this.next].t <= now) {

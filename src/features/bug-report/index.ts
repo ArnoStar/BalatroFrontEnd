@@ -32,6 +32,6 @@ export function register_bug_report_funcs() {
     open_report_dialog(await recorder.screenshot());
   }, { capture: true });
   recorder.on((e) => {
-    if (e.k === 'error') offer_report(() => recorder.screenshot());
+    if (e.k === 'error') offer_report(() => recorder.screenshot(), String(e.message ?? ''));
   });
 }

@@ -47,7 +47,11 @@ function after_round_cues(tl: Timeline, played: Set<number>, hands_before: numbe
   // the played cards' last move to the discard pile: update_hand_played picks the next state
   const t_disc = tl.find_last((e) => moved(e) && (e as any).to === 'discard' && played.has((e as any).card));
   if (view.phase === 'playing') {
-    if (t_disc !== null) tl.at(t_disc + 0.117, () => { G.STATE = G.STATES.DRAW_TO_HAND; G.STATE_COMPLETE = false; });
+    // update_hand_played: once the play area is empty, however the cards left it (a destroyed
+    // card, Sixth Sense or a Glass Card, never reaches the discard pile)
+    const t_gone = tl.find_last((e) => e.type === 'card_removed' && (e as any).area === 'play' && played.has((e as any).card));
+    const t_empty = Math.max(t_disc ?? -1, t_gone ?? -1);
+    tl.at(t_empty >= 0 ? t_empty + 0.117 : tl.end_t, () => { G.STATE = G.STATES.DRAW_TO_HAND; G.STATE_COMPLETE = false; });
     select_hand_after_draw(tl, tl.end_t + 0.117);
   } else {
     const t_nr = t_disc !== null ? t_disc + 0.117 : 0.017;

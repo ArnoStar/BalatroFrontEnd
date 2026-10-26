@@ -6,7 +6,7 @@ import { notify_alert } from '@/shared/ui';
 import { api, type GameView, type NewGameRequest } from '@/shared/api';
 import { recorder } from '@/shared/lib/recorder';
 import { Card } from '@/entities/card';
-import { clear_run } from '@/entities/run';
+import { clear_run, stop_playing } from '@/entities/run';
 
 export function wipe_on(message?: string[], no_card?: boolean, timefac = 1, alt_colour?: any) {
   if (G.screenwipe) return;
@@ -96,6 +96,8 @@ export function wipe_off() {
  */
 export function start_run(req: NewGameRequest | null, open_id?: string, continued = false) {
   G.SETTINGS.paused = true;
+  // an action of the run being left may still be playing (its timeline survives clear_queue)
+  stop_playing();
   G.E_MANAGER.clear_queue();
   wipe_on();
   const got: { view: GameView | null; error: unknown; unlocked: { key: string; set: string }[] } = { view: null, error: null, unlocked: [] };
@@ -111,7 +113,7 @@ export function start_run(req: NewGameRequest | null, open_id?: string, continue
     got.view = v;
     if (req?.seed) { try { localStorage.setItem('balatro-fe.seeded.' + v.id, '1'); } catch { /* no storage */ } }
   }).catch((err) => { got.error = err ?? 'error'; console.error('[api]', err); });
-  G.E_MANAGER.add_event(new Event({ no_delete: true, func: () => { delete_run(); clear_run(); return true; } }));
+  G.E_MANAGER.add_event(new Event({ no_delete: true, func: () => { stop_playing(); delete_run(); clear_run(); return true; } }));
   G.E_MANAGER.add_event(new Event({
     trigger: 'immediate', no_delete: true,
     func: () => {
@@ -138,9 +140,10 @@ export function register_run_lifecycle_funcs() {
 
   G.FUNCS.go_to_menu = () => {
     G.SETTINGS.paused = true;
+    stop_playing();
     G.E_MANAGER.clear_queue();
     wipe_on();
-    G.E_MANAGER.add_event(new Event({ no_delete: true, func: () => { delete_run(); clear_run(); return true; } }));
+    G.E_MANAGER.add_event(new Event({ no_delete: true, func: () => { stop_playing(); delete_run(); clear_run(); return true; } }));
     G.E_MANAGER.add_event(new Event({ no_delete: true, blockable: true, blocking: false, func: () => { G.main_menu('game'); return true; } }));
     wipe_off();
   };
