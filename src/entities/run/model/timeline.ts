@@ -4,8 +4,9 @@
 // choreography of each action runs in G.E_MANAGER alongside, and waits on the
 // timeline where the game's own queue waited on its logic (`until`).
 import { G, Event, play_sound } from '@/shared/lib/engine';
+import { attention_text } from '@/shared/ui';
 import { localize } from '@/shared/lib/localization';
-import type { GameEvent, GameView } from '@/shared/api';
+import type { CardView, GameEvent, GameView } from '@/shared/api';
 import type { Card, CardArea } from '@/entities/card/@x/run';
 import { find_view } from './store';
 import { area_of } from './sync';
@@ -16,7 +17,7 @@ import {
 } from './effects';
 import { joker_message } from './messages';
 
-type Ev = GameEvent & { _skip?: boolean; _i?: number; _n?: number; _stay?: boolean; _status?: boolean; _sound?: HandTextConfig };
+type Ev = GameEvent & { _skip?: boolean; _i?: number; _n?: number; _stay?: boolean; _status?: boolean; _sound?: HandTextConfig; _view?: CardView };
 
 /** how a removed card leaves the screen, and how long before `card_removed` that starts */
 export type Removal = { kind: 'dissolve' | 'shatter' | 'pinch' | 'instant'; colours?: any[] };
@@ -118,8 +119,10 @@ export class Timeline {
     for (let i = 0; i < ev.length; i++) {
       const m = ev[i];
       if (m.type !== 'card_moved') continue;
-      const paired = [ev[i - 1], ev[i + 1]].some((f) => f && f.type === 'card_flipped' && f.card === m.card && f.t === m.t);
-      m._stay = !paired;
+      const flip = [ev[i - 1], ev[i + 1]].find((f) => f && f.type === 'card_flipped' && f.card === m.card && f.t === m.t);
+      m._stay = !flip;
+      // drawn face up: the flip says how the card looks
+      if (flip && flip.type === 'card_flipped' && !flip.face_down && flip.view) m._view = flip.view;
     }
     // runs of moves to one area: each move's place in its run sets the draw sound's pitch
     let run: Ev[] = [];
@@ -252,6 +255,9 @@ export class Timeline {
       case 'round_score': ease_chips_now(e.chips); return true;
       case 'dollars': ease_dollars_now(e.amount, e.total); return true;
       case 'status_text': play_area_status_text_now(e.text === 'Not Allowed!' ? localize('k_not_allowed_ex') : e.text); return true;
+      case 'card_juiced': card_by_id(e.card)?.juice_up(0.7); return true;
+      case 'card_changed': this.changed(e); return true;
+      case 'attention_text': this.attention(e); return true;
     }
     return true;
   }
@@ -264,6 +270,7 @@ export class Timeline {
       return (e as any)._waited > 3;
     }
     const final = find_view(this.view, e.card);
+    const look = e._view ?? (final && !final.cv.face_down ? final.cv : null);
     let card = card_by_id(e.card);
     let fresh = false;
     if (card && card.area === G.deck && to !== G.deck) {
@@ -279,16 +286,16 @@ export class Timeline {
       fresh = true;
       const shopish = SHOP_AREAS.has(e.to);
       const x = shopish ? to.T.x + to.T.w / 2 : to.T.x, y = to.T.y;
-      if (final) {
-        card = create_card(final.cv, x, y, true);
+      if (look || final) {
+        card = create_card(look ?? final!.cv, x, y, true);
       } else {
         card = create_back_card(x, y);
         register_card(e.card, card);
       }
       // shop and pack cards appear as their screens show them (card_entered)
       if (!shopish && to !== G.deck && to !== G.discard) card.start_materialize();
-    } else if (final && !final.cv.face_down) {
-      apply_card_view(card, final.cv);
+    } else if (look) {
+      apply_card_view(card, look);
     }
     const from: CardArea | null = card.area ?? null;
     if (from) from.remove_card(card);
@@ -331,13 +338,49 @@ export class Timeline {
     if (card.facing === want) return;
     if (!e.face_down) {
       const final = find_view(this.view, e.card);
-      if (final && !final.cv.face_down) apply_card_view(card, final.cv);
+      const look = e.view ?? (final && !final.cv.face_down ? final.cv : null);
+      if (look) apply_card_view(card, look);
       play_sound('tarot2', 0.85 + 0.3 * Math.random(), 0.6);
     } else {
       play_sound('card1', 0.85 + 0.3 * Math.random());
     }
     card.flip();
     card.juice_up(0.3, 0.3);
+  }
+
+  /** Card:set_edition's and Card:set_seal's juice and sound, with the card's new look */
+  private changed(e: Ev & { type: 'card_changed' }) {
+    const card = card_by_id(e.card);
+    if (!card) return;
+    if (e.view && !e.view.face_down && card.facing === 'front') apply_card_view(card, e.view);
+    if (e.change === 'seal') {
+      card.juice_up(0.3, 0.3);
+      play_sound('gold_seal', 1.2, 0.4);
+      return;
+    }
+    card.juice_up(1, 0.5);
+    const edition = e.view?.edition;
+    if (edition === 'foil') play_sound('foil1', 1.2, 0.4);
+    if (edition === 'holo') play_sound('holo1', 1.2 * 1.58, 0.4);
+    if (edition === 'polychrome') play_sound('polychrome1', 1.2, 0.7);
+    if (edition === 'negative') play_sound('negative', 1.5, 0.4);
+  }
+
+  /** a big text over a card: The Wheel of Fortune's "Nope!" (Card:use_consumeable) */
+  private attention(e: Ev & { type: 'attention_text' }) {
+    const used = card_by_id(e.card);
+    if (!used || e.key !== 'k_nope_ex') return;
+    const in_pack = G.STATE === G.STATES.TAROT_PACK || G.STATE === G.STATES.SPECTRAL_PACK;
+    attention_text({
+      text: localize('k_nope_ex'), scale: 1.3, hold: 1.4, major: used, backdrop_colour: G.C.SECONDARY_SET.Tarot,
+      align: in_pack ? 'tm' : 'cm', offset: { x: 0, y: in_pack ? -0.2 : 0 }, silent: true,
+    });
+    G.E_MANAGER.add_event(new Event({
+      trigger: 'after', delay: 0.06 * G.SETTINGS.GAMESPEED, blockable: false, blocking: false,
+      func: () => { play_sound('tarot2', 0.76, 0.4); return true; },
+    }));
+    play_sound('tarot2', 1, 0.4);
+    used.juice_up(0.3, 0.5);
   }
 
   private removed(e: Ev & { type: 'card_removed' }) {

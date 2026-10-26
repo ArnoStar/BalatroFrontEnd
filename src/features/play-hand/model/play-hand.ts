@@ -9,7 +9,7 @@ import { check_and_set_high_score, count_usage, profile, save_profile } from '@/
 import type { GameEvent } from '@/shared/api';
 import {
   run, perform, perform_debug, is_legal, legal, stop_use, ease_hands_played, ease_discard, ease_ante, highlight_card, update_hand_text_now,
-  card_by_id, type Timeline,
+  card_by_id, select_hand_after_draw, type Timeline,
 } from '@/entities/run';
 
 const ids_of = (cards: any[]) => cards.map((c) => c.api_id).filter((x) => x !== undefined) as number[];
@@ -48,11 +48,7 @@ function after_round_cues(tl: Timeline, played: Set<number>, hands_before: numbe
   const t_disc = tl.find_last((e) => moved(e) && (e as any).to === 'discard' && played.has((e as any).card));
   if (view.phase === 'playing') {
     if (t_disc !== null) tl.at(t_disc + 0.117, () => { G.STATE = G.STATES.DRAW_TO_HAND; G.STATE_COMPLETE = false; });
-    tl.at(tl.end_t + 0.117, () => {
-      G.STATE = G.STATES.SELECTING_HAND;
-      G.STATE_COMPLETE = false;
-      G.GAME.blind?.drawn_to_hand?.();
-    });
+    select_hand_after_draw(tl, tl.end_t + 0.117);
   } else {
     const t_nr = t_disc !== null ? t_disc + 0.117 : 0.017;
     tl.at(t_nr, () => { G.STATE = G.STATES.NEW_ROUND; G.STATE_COMPLETE = false; });
@@ -229,11 +225,7 @@ export function register_play_hand_funcs() {
         G.GAME.round_scores.cards_discarded.amt += ids.length;
         const view = tl.view;
         if (view.phase === 'playing') {
-          tl.at(tl.end_t + 0.117, () => {
-            G.STATE = G.STATES.SELECTING_HAND;
-            G.STATE_COMPLETE = false;
-            G.GAME.blind?.drawn_to_hand?.();
-          });
+          select_hand_after_draw(tl, tl.end_t + 0.117);
         } else if (view.phase === 'game_over') {
           tl.at(tl.end_t + 0.3, () => { G.STATE = G.STATES.GAME_OVER; G.STATE_COMPLETE = false; });
         }
