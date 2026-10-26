@@ -85,6 +85,7 @@ export function apply_card_view(card: Card, cv: CardView, fresh = false) {
   }
   card.debuff = !!cv.debuffed;
   a.forced_selection = cv.forced_selection || null;
+  card.pinned = !!cv.pinned;
   if (cv.bonus_chips !== null && cv.bonus_chips !== undefined) a.perma_bonus = cv.bonus_chips;
   if (cv.ability) {
     for (const k of Object.keys(cv.ability)) a[k] = cv.ability[k];

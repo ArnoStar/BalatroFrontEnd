@@ -4,6 +4,8 @@ import {
   G, Sprite, UIBox, Event, prep_stage, ease_value, ease_background_colour, play_sound, delay, mix_colours, math_random,
   RESET_STATES,
 } from '@/shared/lib/engine';
+import { api } from '@/shared/api';
+import { apply_progress } from '@/shared/config';
 import { localize } from '@/shared/lib/localization';
 import { UIBox_button } from '@/shared/ui';
 import { Card, CardArea } from '@/entities/card';
@@ -90,6 +92,8 @@ export function main_menu(change_context?: 'splash' | 'game') {
   prep_stage(G.STAGES.MAIN_MENU, G.STATES.MENU, init_game_object);
   G.STAGE_UPDATE = null;
   fetch_saved_game();
+  // the player's progress, which a run may just have changed (what the run setup and the collection show)
+  api.me().then((me) => apply_progress(me.progress)).catch(() => { /* offline: keep what is shown */ });
   G.GAME.selected_back = new Back(G.P_CENTERS.b_red);
   G.FUNCS.change_shadows?.({ to_key: G.SETTINGS.GRAPHICS.shadows === 'On' ? 1 : 2 });
   ease_background_colour({ new_colour: G.C.BLACK, contrast: 1 });

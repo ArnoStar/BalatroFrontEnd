@@ -115,6 +115,8 @@ export function game_draw() {
   const drag = G.CONTROLLER.dragging.target;
   if (drag && drag !== G.CONTROLLER.focused.target) drawAt(drag);
   for (const v of [...G.I.POPUP]) drawAt(v);
+  // (notify_alert's "Unlocked!" box: over everything but the screen wipe)
+  if (G.achievement_notification) drawAt(G.achievement_notification);
   if (G.screenwipe) drawAt(G.screenwipe);
   g.pop();
 

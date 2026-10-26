@@ -388,7 +388,9 @@ export class CardArea extends Moveable {
           card.T.x = card.T.x + card.shadow_parrallax.x / 30;
         }
       });
-      this.cards.sort((a, b) => (a.T.x + a.T.w / 2 - 100 * (a.pinned ? a.sort_id : 0)) - (b.T.x + b.T.w / 2 - 100 * (b.pinned ? b.sort_id : 0)));
+      // (pinned cards by the game's sort_id: the API's card id when the card has one)
+      const pin = (c: any) => (c.pinned ? (c.api_id ?? c.sort_id) : 0);
+      this.cards.sort((a, b) => (a.T.x + a.T.w / 2 - 100 * pin(a)) - (b.T.x + b.T.w / 2 - 100 * pin(b)));
     }
     if (t === 'consumeable') {
       this.cards.forEach((card, i) => {

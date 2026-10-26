@@ -9,6 +9,7 @@ export {
   create_text_input, create_dynatext_pips, create_popup_UIBox_tooltip, attention_text,
 } from './widgets';
 export type { Def } from './widgets';
+export { notify_alert } from './notify-alert';
 export { desc_from_rows, info_tip_from_rows, name_from_rows, create_badge, get_badge_colour } from './desc';
 
 /** registers the widgets' callbacks in G.FUNCS */

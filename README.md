@@ -245,6 +245,15 @@ bug again (to BalatroBugReportService, at `/reports/`):
 - the build (`.build`, written by the deployment, or git), browser, window and
   settings.
 
+**Watching a run again**: `/play/?watch=<id>` (the portal's *Watch* links;
+one's own runs, and other players' finished runs unless their profile is
+private). The API makes a copy of the run at its start and gives the player's
+actions in order (`POST /api/v1/games/{id}/watch`); the game plays each one
+through the same functions the player's click called (the selection set, then
+Play, Use, Buy...), so every action has its animations. A bar shows the
+progress, with Pause, Next step, Speed and Stop; at the end the copy is the
+viewer's to play on (it isn't listed or counted).
+
 **To see it again**, a developer (an account with the developer or admin
 role, given in the portal's `/admin`; the first admin with `make admin`) opens the report in
 the portal (`/bugs`) and clicks *Replay it in the game*, i.e.
@@ -314,8 +323,11 @@ src/
 
 ## Differences with the game
 
-- English only, one profile, everything unlocked and discovered. The profile's
-  stats (high scores, card usage, wins) and settings are kept in the browser.
+- English only, one profile. What is unlocked and discovered is the player's
+  progress, kept by the API (`GET /players/me`, loaded at each main menu): a new
+  account starts like a new save of the game. Testers can switch "unlock
+  everything" on in the portal's account page. The profile's other stats (high
+  scores, card usage) and settings are kept in the browser.
   With sign-in, the profile's name is the account's display name.
 - Runs live in the API, one list per player: "Continue" opens the player's
   most recent unfinished run.

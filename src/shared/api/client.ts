@@ -4,7 +4,7 @@
 import { access_token, go_to_sign_in, refresh_session } from './session';
 import { recorder } from '@/shared/lib/recorder';
 import type {
-  ActionResult, GameSummaryView, GameView, HandPreview, HistoryView, NewGameRequest, PlayerAction, ProblemDetails,
+  ActionResult, GameSummaryView, GameView, HandPreview, HistoryView, MeView, NewGameRequest, PlayerAction, ProblemDetails, WatchView,
 } from './types';
 
 export class ApiError extends Error {
@@ -89,5 +89,9 @@ export const api = {
     request<ActionResult>('POST', `/games/${id}/debug`, { command, expected_version: expected_version ?? null }),
   history: (id: string) => request<HistoryView>('GET', `/games/${id}/history`),
   /** a run rebuilt from a history (admins, or servers with debug commands) */
-  importGame: (history: Pick<HistoryView, 'settings' | 'commands'>) => request<GameView>('POST', '/games/import', history),
+  importGame: (history: Pick<HistoryView, 'settings' | 'commands' | 'start_profile'>) => request<GameView>('POST', '/games/import', history),
+  /** the player's settings and progress */
+  me: () => request<MeView>('GET', '/players/me'),
+  /** watch a run again: a copy at its start and the player's actions */
+  watch: (id: string) => request<WatchView>('POST', `/games/${id}/watch`),
 };

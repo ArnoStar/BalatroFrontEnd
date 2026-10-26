@@ -4,7 +4,7 @@
 // choreography of each action runs in G.E_MANAGER alongside, and waits on the
 // timeline where the game's own queue waited on its logic (`until`).
 import { G, Event, play_sound } from '@/shared/lib/engine';
-import { attention_text } from '@/shared/ui';
+import { attention_text, notify_alert } from '@/shared/ui';
 import { localize } from '@/shared/lib/localization';
 import type { CardView, GameEvent, GameView } from '@/shared/api';
 import type { Card, CardArea } from '@/entities/card/@x/run';
@@ -258,6 +258,7 @@ export class Timeline {
       case 'card_juiced': card_by_id(e.card)?.juice_up(0.7); return true;
       case 'card_changed': this.changed(e); return true;
       case 'attention_text': this.attention(e); return true;
+      case 'card_unlocked': this.unlocked(e); return true;
     }
     return true;
   }
@@ -364,6 +365,14 @@ export class Timeline {
     if (edition === 'holo') play_sound('holo1', 1.2 * 1.58, 0.4);
     if (edition === 'polychrome') play_sound('polychrome1', 1.2, 0.7);
     if (edition === 'negative') play_sound('negative', 1.5, 0.4);
+  }
+
+  /** unlock_card: the center is unlocked from now on (the collection, the run setup) and the notification shows */
+  private unlocked(e: Ev & { type: 'card_unlocked' }) {
+    const c = G.P_CENTERS[e.key];
+    if (c) c.unlocked = true;
+    if (c && e.set === 'Back') c.discovered = true;
+    notify_alert(e.key, e.set);
   }
 
   /** a big text over a card: The Wheel of Fortune's "Nope!" (Card:use_consumeable) */

@@ -39,12 +39,12 @@ export function load_game_data() {
   }
   for (const k of Object.keys(G.P_CARDS)) G.P_CARDS[k].key = k;
 
-  // a fully unlocked profile
-  const unlock = (v: any) => { v.unlocked = true; v.discovered = true; v.alerted = true; };
-  for (const v of Object.values<any>(G.P_CENTERS)) if (!v.wip && !v.demo) unlock(v);
-  for (const v of Object.values<any>(G.P_BLINDS)) unlock(v);
-  for (const v of Object.values<any>(G.P_TAGS)) unlock(v);
-  for (const v of Object.values<any>(G.P_SEALS)) unlock(v);
+  // the prototypes' own flags (a new save); the player's progress is applied on them (apply_progress)
+  for (const t of [G.P_CENTERS, G.P_BLINDS, G.P_TAGS]) {
+    for (const v of Object.values<any>(t)) { v.proto_unlocked = v.unlocked; v.proto_discovered = !!v.discovered; }
+  }
+  // (seals and stakes aren't part of the progress the API keeps: they stay open)
+  for (const v of Object.values<any>(G.P_SEALS)) { v.discovered = true; v.alerted = true; }
   for (const v of Object.values<any>(G.P_STAKES)) v.unlocked = true;
 
   G.P_CENTER_POOLS = {};

@@ -24,6 +24,8 @@ export interface CardView {
   debuffed: boolean;
   selected: boolean;
   forced_selection: boolean;
+  /** a challenge's pinned joker: it stays leftmost */
+  pinned?: boolean;
   cost: number | null;
   sell_value: number | null;
   bonus_chips: number | null;
@@ -55,7 +57,7 @@ export interface RunInfo {
   round_targets: RoundTargets;
 }
 
-export type ActionType = 'select_blind' | 'skip_blind' | 'reroll_boss' | 'play' | 'discard' | 'sort' | 'cash_out' | 'buy'
+export type ActionType = 'select_blind' | 'skip_blind' | 'reroll_boss' | 'play' | 'discard' | 'sort' | 'cash_out' | 'buy' | 'continue'
   | 'reroll' | 'end_shop' | 'use' | 'sell' | 'move' | 'pick' | 'skip_pack';
 
 export interface LegalAction {
@@ -96,7 +98,9 @@ export type GameEvent =
   /** the card shines with its new edition or seal (Aura, Hex, Deja Vu...); `view` is how it looks */
   | { type: 'card_changed'; t: number; card: number; change: 'edition' | 'seal'; view?: CardView | null }
   /** attention_text over a card; `key` is the text's localization key (k_nope_ex: The Wheel of Fortune missed) */
-  | { type: 'attention_text'; t: number; card: number; key: string };
+  | { type: 'attention_text'; t: number; card: number; key: string }
+  /** the player has just unlocked a joker, voucher or deck (the game's "Unlocked!" notification) */
+  | { type: 'card_unlocked'; t: number; key: string; set: string };
 
 export interface ActionResult { game: GameView; events: GameEvent[] }
 
@@ -106,7 +110,7 @@ export interface HandPreview {
 }
 
 export type PlayerAction =
-  | { type: 'select_blind' | 'skip_blind' | 'reroll_boss' | 'cash_out' | 'reroll' | 'end_shop' | 'skip_pack' }
+  | { type: 'select_blind' | 'skip_blind' | 'reroll_boss' | 'cash_out' | 'reroll' | 'end_shop' | 'skip_pack' | 'continue' }
   | { type: 'play' | 'discard'; cards: number[] }
   | { type: 'sort'; mode: 'rank' | 'suit' }
   | { type: 'buy'; card: number; use?: boolean }
@@ -131,4 +135,28 @@ export interface HistoryView {
   engine_version: string;
   settings: { seed: string; deck: string; stake: number; challenge: string | null; game_speed: number; seeded?: boolean };
   commands: Record<string, unknown>[];
+  /** the player's progress the run started from (null: from before progress was kept, fully unlocked) */
+  start_profile?: Record<string, unknown> | null;
+}
+
+/** the player's progress (GET /players/me): what the game's profile has unlocked and discovered */
+export interface ProgressView {
+  all_unlocked: boolean;
+  can_unlock_all: boolean;
+  unlocked: string[];
+  discovered: string[];
+  challenges_completed: string[];
+  challenges_unlocked: number;
+  deck_stakes: Record<string, number>;
+  max_stakes: Record<string, number>;
+}
+
+export interface MeView { id: string; name: string | null; private: boolean; progress: ProgressView }
+
+/** POST /games/{id}/watch: a copy of the run at its start, and the player's actions to play on it */
+export interface WatchView {
+  source: string;
+  owner_name: string | null;
+  game: GameView;
+  steps: { version: number; action: Record<string, any> }[];
 }
