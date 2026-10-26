@@ -13,6 +13,7 @@ import { SigningIn } from '@/shared/api';
 import { input_state, key_down, key_up, pointer_down, pointer_move, pointer_up } from '@/shared/lib/input';
 import { recorder } from '@/shared/lib/recorder';
 import { register_bug_report_funcs, start_replay_if_asked } from '@/features/bug-report';
+import { start_watch_if_asked } from '@/features/watch-run';
 
 const canvas = document.getElementById('screen') as HTMLCanvasElement;
 
@@ -104,6 +105,7 @@ async function main() {
   wire_input();
   show_splash(main_menu);
   void start_replay_if_asked(); // /play/?report=<id> (it waits for the main menu)
+  void start_watch_if_asked(); // /play/?watch=<id>
   // the dev server: the game's objects for scripts (scripts/report-e2e.mjs ...)
   if (import.meta.env.DEV) (window as any).__game = { G, run, recorder };
 

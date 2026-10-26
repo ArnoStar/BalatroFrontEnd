@@ -118,6 +118,12 @@ export function select_hand_after_draw(tl: Timeline, t: number) {
   }));
 }
 
+/** the run is left (a new run, the main menu): the action still playing stops there */
+export function stop_playing() {
+  playing.tl?.cancel();
+  playing.tl = null;
+}
+
 /** true while an action's timeline is still playing */
 export function timeline_playing() {
   return !!playing.tl && !playing.tl.done;

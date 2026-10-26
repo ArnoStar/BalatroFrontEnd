@@ -18,7 +18,7 @@ function get_challenge_rule(_challenge: any, _type: string, _id: string) {
 }
 
 export function challenges(from_game_over?: any) {
-  profile().challenges_unlocked = G.CHALLENGES.length;
+  if (profile().all_unlocked) profile().challenges_unlocked = G.CHALLENGES.length;
   G.run_setup_seed = null;
   if (G.OVERLAY_MENU) {
     const seed_toggle = G.OVERLAY_MENU.get_UIE_by_ID('run_setup_seed');

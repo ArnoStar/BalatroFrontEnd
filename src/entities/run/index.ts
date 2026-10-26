@@ -14,7 +14,7 @@ export {
 export type { HandTextConfig, HandTextVals, StatusExtra } from './model/effects';
 export { Timeline, default_hooks } from './model/timeline';
 export type { TimelineHooks, Removal } from './model/timeline';
-export { perform, perform_debug, resync, playing, timeline_playing, finish_action, select_hand_after_draw } from './model/perform';
+export { perform, perform_debug, resync, playing, timeline_playing, finish_action, select_hand_after_draw, stop_playing } from './model/perform';
 export type { Choreography } from './model/perform';
 export { full_deck, deck_card } from './model/deck';
 export type { DeckCard } from './model/deck';

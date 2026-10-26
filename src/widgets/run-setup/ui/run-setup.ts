@@ -357,7 +357,7 @@ export function register_run_setup_funcs() {
       const deck = G.GAME.viewed_back.effect.center.key;
       G.FUNCS.start_run(null, { request: { seed, deck, stake: G.viewed_stake ?? 1, challenge: G.challenge_tab?.id ?? null, game_speed: G.SETTINGS.GAMESPEED } });
     } else if (G.SETTINGS.current_setup === 'Continue' && saved.game) {
-      G.FUNCS.start_run(null, { open_id: saved.game.id });
+      G.FUNCS.start_run(null, { open_id: saved.game.id, continue: true });
     }
   };
 }

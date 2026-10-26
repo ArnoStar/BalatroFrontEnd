@@ -1,6 +1,8 @@
-// The player's profile (G.PROFILES): everything unlocked, no win history; the
-// deck and stake last chosen are remembered in this browser.
+// The player's profile (G.PROFILES): the progress the API keeps (apply_progress:
+// what is unlocked and discovered, the decks' wins, the challenges); the deck
+// and stake last chosen are remembered in this browser.
 import { G } from '@/shared/lib/engine';
+import type { ProgressView } from '@/shared/api';
 
 const KEY = 'balatro-fe.memory';
 const PROFILE_KEY = 'balatro-fe.profile';
@@ -25,7 +27,7 @@ export function save_memory() {
 export function init_profile() {
   const p = profile();
   p.name = p.name || 'P' + G.SETTINGS.profile;
-  p.all_unlocked = true;
+  p.all_unlocked = false;
   p.MEMORY = load_memory();
   p.deck_usage = p.deck_usage ?? {};
   p.joker_usage = p.joker_usage ?? {};
@@ -114,4 +116,38 @@ export function load_settings() {
   if (s.GRAPHICS) {
     for (const k of ['shadows', 'crt', 'bloom']) if (s.GRAPHICS[k] !== undefined) S.GRAPHICS[k] = s.GRAPHICS[k];
   }
+}
+
+/**
+ * The player's progress (GET /players/me) on the game's tables, as the game
+ * keeps it in G.PROFILES and the centers' unlocked and discovered flags: the
+ * run setup, the collection and the challenges read them. ``null``: a new
+ * save. The pools themselves are the API's (each run keeps its profile).
+ */
+export function apply_progress(view: ProgressView | null) {
+  const p = profile();
+  const all = !!view?.all_unlocked;
+  p.all_unlocked = all;
+  const unlocked = new Set(view?.unlocked ?? []);
+  const discovered = new Set(view?.discovered ?? []);
+  for (const t of [G.P_CENTERS, G.P_BLINDS, G.P_TAGS]) {
+    for (const [k, v] of Object.entries<any>(t)) {
+      if (v.wip || v.demo) continue;
+      // (only centers can be locked; one the game leaves unset counts as unlocked, as `unlocked ~= false`)
+      if (t === G.P_CENTERS) v.unlocked = v.proto_unlocked === false ? all || unlocked.has(k) : (all || v.proto_unlocked);
+      v.discovered = all || discovered.has(k) || v.proto_discovered;
+      v.alerted = true;
+    }
+  }
+  // set_deck_win's wins: every stake up to the best one won
+  p.deck_usage = {};
+  for (const [deck, stake] of Object.entries(view?.deck_stakes ?? {})) {
+    const wins: Record<number, number> = {};
+    for (let i = 1; i <= stake; i++) wins[i] = 1;
+    p.deck_usage[deck] = { count: 1, order: G.P_CENTERS[deck]?.order ?? 0, wins, losses: {} };
+  }
+  p.challenge_progress.completed = Object.fromEntries((view?.challenges_completed ?? []).map((id) => [id, true]));
+  p.challenges_unlocked = all ? G.CHALLENGES?.length : (view?.challenges_unlocked || undefined);
+  // game.lua sorts the deck list with the unlocked decks first
+  G.P_CENTER_POOLS?.Back?.sort((a: any, b: any) => (a.order - (a.unlocked ? 100 : 0)) - (b.order - (b.unlocked ? 100 : 0)));
 }

@@ -2,10 +2,11 @@
 // start_setup_run, go_to_menu, notify_then_setup_run, copy_seed, wipe_on,
 // wipe_off). A new run is created by the API; an open run is fetched.
 import { G, UIBox, DynaText, Particles, Event, HEX, play_sound, delete_run, pseudorandom_element } from '@/shared/lib/engine';
+import { notify_alert } from '@/shared/ui';
 import { api, type GameView, type NewGameRequest } from '@/shared/api';
 import { recorder } from '@/shared/lib/recorder';
 import { Card } from '@/entities/card';
-import { clear_run } from '@/entities/run';
+import { clear_run, stop_playing } from '@/entities/run';
 
 export function wipe_on(message?: string[], no_card?: boolean, timefac = 1, alt_colour?: any) {
   if (G.screenwipe) return;
@@ -88,18 +89,31 @@ export function wipe_off() {
   G.E_MANAGER.add_event(new Event({ trigger: 'after', delay: 1.2, no_delete: true, blocking: true, timer: 'REAL', func: () => true }));
 }
 
-/** G.FUNCS.start_run: wipes the screen while the API creates (or returns) the run */
-export function start_run(req: NewGameRequest | null, open_id?: string) {
+/**
+ * G.FUNCS.start_run: wipes the screen while the API creates (or returns) the
+ * run. ``continued``: the player continues it from the main menu, which the
+ * API is told (Game:start_run with a save: it can unlock Throwback).
+ */
+export function start_run(req: NewGameRequest | null, open_id?: string, continued = false) {
   G.SETTINGS.paused = true;
+  // an action of the run being left may still be playing (its timeline survives clear_queue)
+  stop_playing();
   G.E_MANAGER.clear_queue();
   wipe_on();
-  const got: { view: GameView | null; error: unknown } = { view: null, error: null };
-  const p = open_id ? api.getGame(open_id) : api.newGame(req ?? {});
+  const got: { view: GameView | null; error: unknown; unlocked: { key: string; set: string }[] } = { view: null, error: null, unlocked: [] };
+  const p = open_id
+    ? api.getGame(open_id).then((v) => (continued && v.phase !== 'game_over'
+      ? api.act(v.id, { type: 'continue' }, v.version).then((r) => {
+        for (const e of r.events) if (e.type === 'card_unlocked') got.unlocked.push({ key: e.key, set: e.set });
+        return r.game;
+      }).catch(() => v)
+      : v))
+    : api.newGame(req ?? {});
   p.then((v) => {
     got.view = v;
     if (req?.seed) { try { localStorage.setItem('balatro-fe.seeded.' + v.id, '1'); } catch { /* no storage */ } }
   }).catch((err) => { got.error = err ?? 'error'; console.error('[api]', err); });
-  G.E_MANAGER.add_event(new Event({ no_delete: true, func: () => { delete_run(); clear_run(); return true; } }));
+  G.E_MANAGER.add_event(new Event({ no_delete: true, func: () => { stop_playing(); delete_run(); clear_run(); return true; } }));
   G.E_MANAGER.add_event(new Event({
     trigger: 'immediate', no_delete: true,
     func: () => {
@@ -108,6 +122,11 @@ export function start_run(req: NewGameRequest | null, open_id?: string) {
       // where a bug report's replay can start: this run, opened at this version
       recorder.record('run', { id: got.view.id, version: got.view.version });
       G.start_run_page(got.view);
+      // what continuing unlocked (Throwback): unlock_card's notification, once the run is on screen
+      for (const u of got.unlocked) {
+        if (G.P_CENTERS[u.key]) G.P_CENTERS[u.key].unlocked = true;
+        notify_alert(u.key, u.set);
+      }
       return true;
     },
   }));
@@ -117,13 +136,14 @@ export function start_run(req: NewGameRequest | null, open_id?: string) {
 export function register_run_lifecycle_funcs() {
   G.FUNCS.wipe_on = wipe_on;
   G.FUNCS.wipe_off = wipe_off;
-  G.FUNCS.start_run = (_e: any, args: any = {}) => start_run(args.request ?? {}, args.open_id);
+  G.FUNCS.start_run = (_e: any, args: any = {}) => start_run(args.request ?? {}, args.open_id, !!args.continue);
 
   G.FUNCS.go_to_menu = () => {
     G.SETTINGS.paused = true;
+    stop_playing();
     G.E_MANAGER.clear_queue();
     wipe_on();
-    G.E_MANAGER.add_event(new Event({ no_delete: true, func: () => { delete_run(); clear_run(); return true; } }));
+    G.E_MANAGER.add_event(new Event({ no_delete: true, func: () => { stop_playing(); delete_run(); clear_run(); return true; } }));
     G.E_MANAGER.add_event(new Event({ no_delete: true, blockable: true, blocking: false, func: () => { G.main_menu('game'); return true; } }));
     wipe_off();
   };

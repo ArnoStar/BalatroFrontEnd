@@ -102,6 +102,10 @@ class Replay {
   private syncs: number[] = [];
   private next = 0;
   private started_actions = 0;
+  // time spent waiting for the screen since the last sync point (see tick)
+  private lag = 0;
+  private lag_sync = -1;
+  private last_tick = 0;
   paused = false;
   stopped = false;
   diverged: string | null = null;
@@ -124,6 +128,13 @@ class Replay {
   tick = () => {
     if (this.stopped) return;
     const now = recorder.now();
+    // The player's inputs reached a game that took them: when an input comes due while
+    // the game ignores input (a screen wipe, the controls locked: the screen is slower
+    // here), it waits, and so do the inputs after it until the next sync point.
+    const waiting_input = this.next < this.plan.inputs.length ? this.plan.inputs[this.next] : null;
+    if (waiting_input && waiting_input.sync !== this.lag_sync) { this.lag_sync = waiting_input.sync; this.lag = 0; }
+    if ((G.screenwipe || G.CONTROLLER?.locked) && this.last_tick) this.lag += now - this.last_tick;
+    this.last_tick = now;
     // the inputs that are due, but only those of one recorded frame per frame:
     // a press, the moves of a drag and the release must reach the game in as
     // many frames as they did (all in one frame, a drag is a click)
@@ -131,7 +142,8 @@ class Replay {
     while (!this.paused && this.next < this.plan.inputs.length) {
       const p = this.plan.inputs[this.next];
       const base = this.syncs[p.sync];
-      if (base === undefined || now - base < p.delay) break;
+      if (base === undefined || now - base - this.lag < p.delay) break;
+      if (G.screenwipe || G.CONTROLLER?.locked) break;
       if (frame !== undefined && p.e.f !== frame) break;
       frame = p.e.f ?? null;
       dispatch(p.e);
@@ -189,7 +201,11 @@ export async function start_replay_if_asked() {
     const plan = make_plan(report, at);
     await when_menu_ready();
     hud.message(`Rebuilding the run at version ${plan.version} of ${report.history.commands.length}…`);
-    const view = await api.importGame({ settings: report.history.settings, commands: report.history.commands.slice(0, plan.version) });
+    // (the progress the run started from decides its pools: a rebuild needs it)
+    const view = await api.importGame({
+      settings: report.history.settings, commands: report.history.commands.slice(0, plan.version),
+      start_profile: report.history.start_profile ?? null,
+    });
     if (with_inputs && plan.inputs.length) {
       current = new Replay(report, plan, use_players_settings(report.client));
       input_state.replaying = true;
