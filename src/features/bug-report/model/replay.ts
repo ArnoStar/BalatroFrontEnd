@@ -14,6 +14,7 @@
 //   ?report=<id>&inputs=0    rebuild where the recording starts, without the inputs
 import { G } from '@/shared/lib/engine';
 import { api, reports, type ReportView } from '@/shared/api';
+import { save_settings } from '@/shared/config';
 import { input_state, key_down, key_up, pointer_down, pointer_move, pointer_up, to_screen } from '@/shared/lib/input';
 import { recorder, type RecordedEvent } from '@/shared/lib/recorder';
 import { hud } from '../ui/replay-hud';
@@ -68,6 +69,30 @@ function dispatch(e: RecordedEvent) {
   else if (e.type === 'keyup') key_up(String(e.key));
 }
 
+/**
+ * The player's settings that decide what a click hits (the report's
+ * client.settings): the game speed (how far an animation is when the click
+ * comes) and where Play and Discard are. Returns how to put the developer's back.
+ */
+const PLAYER_SETTINGS: Record<string, string> = { game_speed: 'GAMESPEED', play_button_pos: 'play_button_pos' };
+
+function use_players_settings(client: Record<string, unknown> | null | undefined): () => void {
+  const theirs = (client?.settings ?? null) as Record<string, unknown> | null;
+  const mine: Record<string, unknown> = {};
+  for (const [from, to] of Object.entries(PLAYER_SETTINGS)) {
+    if (theirs?.[from] === undefined || theirs[from] === null) continue;
+    mine[to] = G.SETTINGS[to];
+    G.SETTINGS[to] = theirs[from];
+  }
+  return () => {
+    const moved = 'play_button_pos' in mine && mine.play_button_pos !== G.SETTINGS.play_button_pos;
+    Object.assign(G.SETTINGS, mine);
+    save_settings();
+    // the run screen rebuilds its buttons in the developer's order (update_selecting_hand)
+    if (moved && G.buttons) { G.buttons.remove(); G.buttons = null; }
+  };
+}
+
 function same(a: unknown, b: unknown) {
   const strip = (x: any) => (x && typeof x === 'object' ? { ...x, expected_version: undefined } : x);
   return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
@@ -82,7 +107,7 @@ class Replay {
   diverged: string | null = null;
   private off: () => void;
 
-  constructor(readonly report: ReportView, readonly plan: Plan) {
+  constructor(readonly report: ReportView, readonly plan: Plan, private restore_settings: () => void = () => {}) {
     this.off = recorder.on((e) => {
       if (e.k === 'run' && !this.syncs.length) this.syncs.push(recorder.now());
       else if (e.k === 'action' && e.phase === 'end' && this.syncs.length) this.syncs.push(recorder.now());
@@ -130,6 +155,7 @@ class Replay {
     if (this.stopped) return;
     this.stopped = true;
     this.off();
+    this.restore_settings();
     input_state.replaying = false;
     if (by_user) hud.message('Replay stopped: the run is yours to play.');
   }
@@ -165,12 +191,13 @@ export async function start_replay_if_asked() {
     hud.message(`Rebuilding the run at version ${plan.version} of ${report.history.commands.length}…`);
     const view = await api.importGame({ settings: report.history.settings, commands: report.history.commands.slice(0, plan.version) });
     if (with_inputs && plan.inputs.length) {
-      current = new Replay(report, plan);
+      current = new Replay(report, plan, use_players_settings(report.client));
       input_state.replaying = true;
       requestAnimationFrame(current.tick);
+      const speed = `at the player's game speed (x${G.SETTINGS.GAMESPEED})`;
       hud.message(plan.approximate
-        ? 'Replaying from the first action the recording has (the run was opened before it): the screen may differ a little.'
-        : "Replaying the player's inputs…");
+        ? `Replaying from the first action the recording has (the run was opened before it), ${speed}: the screen may differ a little.`
+        : `Replaying the player's inputs ${speed}…`);
     } else {
       hud.message(`The run at version ${plan.version}. ${with_inputs ? 'No inputs were recorded after it.' : ''}`);
     }

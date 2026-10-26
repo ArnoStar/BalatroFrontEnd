@@ -341,6 +341,8 @@ function open_tag_booster(key: string, tl?: Timeline) {
   if (move && move.type === 'card_moved') register_card(move.card, card);
   G.TAROT_INTERRUPT = G.STATE;
   G.GAME.PACK_INTERRUPT = G.STATE;
+  // the tag opens it with G.FUNCS.use_card, which moves the blind select away
+  hide_screens(card);
   delay(0.1);
   open_booster(card, tl);
   card.start_materialize();

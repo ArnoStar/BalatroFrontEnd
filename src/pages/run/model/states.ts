@@ -109,6 +109,7 @@ function update_draw_to_hand() {
   remove_shop();
   if (!G.STATE_COMPLETE) {
     G.STATE_COMPLETE = true;
+    run.draws += 1;
     if (run.view) react_tags(run.view.tags, undefined, ['round_start_bonus']);
     ease_background_colour_blind(G.STATES.DRAW_TO_HAND);
   }

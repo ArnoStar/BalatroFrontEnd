@@ -3,7 +3,7 @@
 import { G, Event, play_sound, delay } from '@/shared/lib/engine';
 import type { GameView } from '@/shared/api';
 import { add_tag, react_tags } from '@/entities/tag';
-import { perform, stop_use, ease_round, sync_game, type Timeline } from '@/entities/run';
+import { perform, stop_use, ease_round, sync_game, select_hand_after_draw, type Timeline } from '@/entities/run';
 
 /** new_round: the blind is set, then the hand is drawn (the API's events) */
 function new_round(view: GameView, tl: Timeline) {
@@ -33,13 +33,7 @@ function new_round(view: GameView, tl: Timeline) {
       return true;
     },
   }));
-  if (view.phase === 'playing') {
-    tl.at(tl.end_t + 0.117, () => {
-      G.STATE = G.STATES.SELECTING_HAND;
-      G.STATE_COMPLETE = false;
-      G.GAME.blind?.drawn_to_hand?.();
-    });
-  }
+  if (view.phase === 'playing') select_hand_after_draw(tl, tl.end_t + 0.117);
 }
 
 const PACK_OF_KIND: Record<string, string> = {

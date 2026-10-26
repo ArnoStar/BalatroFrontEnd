@@ -10,6 +10,8 @@ export const run = {
   preview: null as HandPreview | null,
   /** the preview's request counter, to drop late answers */
   preview_seq: 0,
+  /** times the game entered DRAW_TO_HAND (update_draw_to_hand with STATE_COMPLETE false) */
+  draws: 0,
 };
 
 export function set_view(view: GameView) {

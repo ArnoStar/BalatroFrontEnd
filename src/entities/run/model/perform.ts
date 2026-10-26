@@ -92,6 +92,32 @@ export async function perform(action: PlayerAction, ch: Choreography = {}, send?
   return true;
 }
 
+/**
+ * The hand is drawn: G.STATE becomes SELECTING_HAND at timeline time `t`, but
+ * never before the game has been through DRAW_TO_HAND (update_draw_to_hand
+ * takes the old buttons away; the new ones are made fresh) and before the
+ * action's choreography queued so far has played. The game sets
+ * SELECTING_HAND from its own queue after the draw; here the draw is the
+ * API's, and an answer that comes after the draw's time plays it all at once
+ * (at x4, an animation is shorter than a slow answer), so the order has to be
+ * kept by hand.
+ */
+export function select_hand_after_draw(tl: Timeline, t: number) {
+  const draws = run.draws;
+  let queued = false;
+  G.E_MANAGER.add_event(new Event({ trigger: 'immediate', func: () => { queued = true; return true; } }));
+  G.E_MANAGER.add_event(new Event({
+    blocking: false, blockable: false,
+    func: () => {
+      if (!queued || run.draws === draws || G.STATE !== G.STATES.DRAW_TO_HAND || !tl.started || tl.elapsed < t) return false;
+      G.STATE = G.STATES.SELECTING_HAND;
+      G.STATE_COMPLETE = false;
+      G.GAME.blind?.drawn_to_hand?.();
+      return true;
+    },
+  }));
+}
+
 /** true while an action's timeline is still playing */
 export function timeline_playing() {
   return !!playing.tl && !playing.tl.done;

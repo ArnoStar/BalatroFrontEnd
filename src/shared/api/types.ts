@@ -82,14 +82,21 @@ export interface GameSummaryView {
 
 export type GameEvent =
   | { type: 'card_moved'; t: number; card: number; to: Area }
-  | { type: 'card_flipped'; t: number; card: number; face_down: boolean }
+  /** turned face up: `view` is how the card looks (it may end the action in the deck, which the GameView doesn't list) */
+  | { type: 'card_flipped'; t: number; card: number; face_down: boolean; view?: CardView | null }
   | { type: 'card_removed'; t: number; card: number; area: Area }
   | { type: 'hand'; t: number; hand?: string | null; level?: number | string | null; chips?: number | string | null; mult?: number | string | null; hand_score?: number | null }
   | { type: 'card_text'; t: number; card: number | null; effect: 'chips' | 'mult' | 'x_mult' | 'dollars' | 'again' | 'debuffed' | 'swap' | 'message'; amount: number | null; message: string | null; held: boolean; edition: boolean }
   | { type: 'hand_scored'; t: number; hand: string; chips: number; mult: number; score: number; round_score: number }
   | { type: 'round_score'; t: number; chips: number }
   | { type: 'dollars'; t: number; amount: number; total: number }
-  | { type: 'status_text'; t: number; text: string };
+  | { type: 'status_text'; t: number; text: string }
+  /** the joker behind a scored or held card's effect wiggles (juice_card) */
+  | { type: 'card_juiced'; t: number; card: number }
+  /** the card shines with its new edition or seal (Aura, Hex, Deja Vu...); `view` is how it looks */
+  | { type: 'card_changed'; t: number; card: number; change: 'edition' | 'seal'; view?: CardView | null }
+  /** attention_text over a card; `key` is the text's localization key (k_nope_ex: The Wheel of Fortune missed) */
+  | { type: 'attention_text'; t: number; card: number; key: string };
 
 export interface ActionResult { game: GameView; events: GameEvent[] }
 
