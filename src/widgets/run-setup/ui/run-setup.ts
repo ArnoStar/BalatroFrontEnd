@@ -10,7 +10,7 @@ import {
   create_UIBox_generic_options, create_tabs, create_option_cycle, create_toggle, create_text_input, UIBox_button, simple_text_container,
 } from '@/shared/ui';
 import { get_stake_sprite, get_stake_col } from '@/shared/ui/stake';
-import { profile, save_memory } from '@/shared/config';
+import { get_deck_win_stake, profile, save_memory } from '@/shared/config';
 import { api, type GameSummaryView } from '@/shared/api';
 import { Card, CardArea } from '@/entities/card';
 import { Back } from '@/entities/back';
@@ -41,16 +41,25 @@ function stake_option(_type: string) {
   const middle = { n: G.UIT.R, config: { align: 'cm', minh: 1.7, minw: 7.3 }, nodes: [
     { n: G.UIT.O, config: { id: null, func: 'RUN_SETUP_check_stake2', object: new Moveable() } },
   ] };
+  let max_stake = get_deck_win_stake(G.GAME.viewed_back.effect.center.key);
+  if (profile().all_unlocked) max_stake = 8;
   const stake_options: number[] = [];
-  for (let i = 1; i <= 8; i++) stake_options.push(i);
+  for (let i = 1; i <= Math.min(max_stake + 1, 8); i++) stake_options.push(i);
   return { n: G.UIT.ROOT, config: { align: 'tm', colour: G.C.CLEAR, minh: 2.03, minw: 8.3 }, nodes: [
     _type === 'Continue' ? middle : create_option_cycle({ options: stake_options, opt_callback: 'change_stake', current_option: G.viewed_stake, colour: G.C.RED, w: 6, mid: middle }),
   ] };
 }
 
 function viewed_stake_option() {
-  G.viewed_stake = Math.min(8, G.viewed_stake ?? 1);
-  if (G.SETTINGS.current_setup !== 'Continue') { profile().MEMORY.stake = G.viewed_stake; save_memory(); }
+  G.viewed_stake = G.viewed_stake ?? 1;
+  let max_stake = get_deck_win_stake(G.GAME.viewed_back.effect.center.key);
+  if (profile().all_unlocked) max_stake = 8;
+  // (not a continued run's stake: a run from before progress was kept may be above it)
+  if (G.SETTINGS.current_setup !== 'Continue') {
+    G.viewed_stake = Math.min(max_stake + 1, G.viewed_stake);
+    profile().MEMORY.stake = G.viewed_stake;
+    save_memory();
+  }
   const stake_sprite = get_stake_sprite(G.viewed_stake);
   return { n: G.UIT.ROOT, config: { align: 'cm', colour: G.C.BLACK, r: 0.1 }, nodes: [
     { n: G.UIT.C, config: { align: 'cm', padding: 0 }, nodes: [
@@ -99,7 +108,9 @@ function run_setup_option(type: string) {
       const seed_toggle = G.OVERLAY_MENU.get_UIE_by_ID('run_setup_seed');
       if (seed_toggle) seed_toggle.states.visible = true;
     }
-    G.viewed_stake = mem.stake ?? 1;
+    // (a stake remembered in this browser may be above what the deck offers now)
+    const max_stake = profile().all_unlocked ? 8 : get_deck_win_stake(G.GAME.viewed_back.effect.center.key);
+    G.viewed_stake = Math.min(mem.stake ?? 1, max_stake + 1);
     G.FUNCS.change_stake({ to_key: G.viewed_stake });
   } else {
     G.run_setup_seed = null;
@@ -257,6 +268,8 @@ export function register_run_setup_funcs() {
   G.FUNCS.change_viewed_back = (args: any) => {
     G.viewed_stake = G.viewed_stake ?? 1;
     G.GAME.viewed_back.change_to(G.P_CENTER_POOLS.Back[args.to_key - 1]);
+    const max_stake = get_deck_win_stake(G.GAME.viewed_back.effect.center.key);
+    G.viewed_stake = Math.min(G.viewed_stake, max_stake + 1);
     profile().MEMORY.deck = args.to_val;
     save_memory();
   };
