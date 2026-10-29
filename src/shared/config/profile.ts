@@ -20,6 +20,13 @@ export function profile(): any {
   return G.PROFILES[(G.SETTINGS.profile ?? 1) - 1];
 }
 
+/** get_deck_win_stake(_deck_key) (misc_functions.lua): the highest stake won with the deck (0: none) */
+export function get_deck_win_stake(_deck_key: string): number {
+  let _w = 0;
+  for (const k of Object.keys(profile().deck_usage?.[_deck_key]?.wins ?? {})) _w = Math.max(Number(k), _w);
+  return _w;
+}
+
 export function save_memory() {
   try { localStorage.setItem(KEY, JSON.stringify(profile().MEMORY)); } catch { /* no storage */ }
 }
