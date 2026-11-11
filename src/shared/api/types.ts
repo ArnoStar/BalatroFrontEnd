@@ -158,5 +158,6 @@ export interface WatchView {
   source: string;
   owner_name: string | null;
   game: GameView;
-  steps: { version: number; action: Record<string, any> }[];
+  /** `pointer`: the player's pointer before the action, as the game sent it (shared/lib/pointer-trace); null for older runs */
+  steps: { version: number; action: Record<string, any>; pointer?: { v: 1; e: (number | string)[][] } | null }[];
 }

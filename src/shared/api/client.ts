@@ -42,6 +42,18 @@ function send(method: string, path: string, body: unknown, token: string | null,
   });
 }
 
+/** a body as the recorder keeps it: an action's pointer as its size (it is long, and only for watching) */
+function recorded(body: unknown): unknown {
+  if (body && typeof body === 'object' && 'pointer' in body) {
+    const { pointer, ...rest } = body as { pointer?: { e?: unknown[] } };
+    return { ...rest, pointer: `${pointer?.e?.length ?? 0} entries` };
+  }
+  return body ?? null;
+}
+
+/** false once the API refused an action's pointer (an API from before it kept them): sent without it */
+let pointer_accepted = true;
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = await access_token();
   const rid = new_request_id();
@@ -57,7 +69,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       if (res.status === 401) go_to_sign_in();
     }
   } catch (err) {
-    recorder.api(method, path, body ?? null, 0, performance.now() - started, rid, { network_error: String(err) });
+    recorder.api(method, path, recorded(body), 0, performance.now() - started, rid, { network_error: String(err) });
     throw err;
   }
   const text = res.status === 204 ? '' : await res.text();
@@ -67,7 +79,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   } catch {
     json = { not_json: text.slice(0, 500) };
   }
-  recorder.api(method, path, body ?? null, res.status, performance.now() - started, res.headers.get('x-request-id') ?? rid, json);
+  recorder.api(method, path, recorded(body), res.status, performance.now() - started, res.headers.get('x-request-id') ?? rid, json);
   if (res.status === 204) return undefined as T;
   if (!res.ok) {
     const p = json && typeof json === 'object' && 'code' in json ? (json as ProblemDetails) : null;
@@ -82,8 +94,20 @@ export const api = {
   listGames: (limit = 50, offset = 0) => request<GameSummaryView[]>('GET', `/games?limit=${limit}&offset=${offset}`),
   getGame: (id: string) => request<GameView>('GET', `/games/${id}`),
   deleteGame: (id: string) => request<void>('DELETE', `/games/${id}`),
-  act: (id: string, action: PlayerAction, expected_version?: number) =>
-    request<ActionResult>('POST', `/games/${id}/actions`, { ...action, expected_version: expected_version ?? null }),
+  /** `pointer`: the player's pointer since the previous action (shared/lib/pointer-trace), kept for watching the run */
+  act: async (id: string, action: PlayerAction, expected_version?: number, pointer?: { v: 1; e: (number | string)[][] } | null) => {
+    const body = { ...action, expected_version: expected_version ?? null };
+    if (pointer && pointer_accepted) {
+      try {
+        return await request<ActionResult>('POST', `/games/${id}/actions`, { ...body, pointer });
+      } catch (err) {
+        // (the API doesn't know the field: the action goes again without it, and so do the next ones)
+        if (!(err instanceof ApiError && err.status === 422 && JSON.stringify(err.problem ?? {}).includes('pointer'))) throw err;
+        pointer_accepted = false;
+      }
+    }
+    return request<ActionResult>('POST', `/games/${id}/actions`, body);
+  },
   preview: (id: string, cards: number[]) => request<HandPreview>('POST', `/games/${id}/preview`, { cards }),
   debug: (id: string, command: Record<string, unknown>, expected_version?: number) =>
     request<ActionResult>('POST', `/games/${id}/debug`, { command, expected_version: expected_version ?? null }),

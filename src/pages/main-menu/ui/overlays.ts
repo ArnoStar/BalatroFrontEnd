@@ -1,14 +1,15 @@
 // The main menu's profile and language overlays (UI_definitions.lua:
 // G.UIDEF.profile_select, profile_option, language_selector; button_callbacks.lua:
 // profile_select, can_load_profile, load_profile, can_delete_profile,
-// delete_profile, language_selection, change_lang). This front end has one
-// profile (kept in the browser) and English only. When the player is signed
+// delete_profile, language_selection, beta_lang_alert, warn_lang, change_lang).
+// This front end has one profile (kept in the browser); a language's text and
+// font are fetched when it is picked (shared/config/languages). When the player is signed
 // in, the profile is their account: its name comes from the account (changed in
 // the portal), with ACCOUNT and LOG OUT buttons in place of the name field.
-import { G, Event, play_sound } from '@/shared/lib/engine';
+import { G, Event, UIBox, play_sound, delete_run } from '@/shared/lib/engine';
 import { localize } from '@/shared/lib/localization';
-import { create_UIBox_generic_options, create_tabs, create_text_input } from '@/shared/ui';
-import { profile, save_profile } from '@/shared/config';
+import { create_UIBox_generic_options, create_tabs, create_text_input, create_UIBox_card_alert, overlay_infotip } from '@/shared/ui';
+import { profile, save_profile, save_settings, use_language } from '@/shared/config';
 import { display_name, go_to_account, sign_out } from '@/shared/api';
 import { create_progress_box, set_profile_progress } from '@/widgets/stats';
 
@@ -101,7 +102,11 @@ function language_selector() {
   return create_UIBox_generic_options({ contents: [{ n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: rows }] });
 }
 
-export function register_main_menu_overlays() {
+/** Game:main_menu, set by the main menu page (it imports this file) */
+let main_menu_again: () => void = () => {};
+
+export function register_main_menu_overlays(main_menu: () => void) {
+  main_menu_again = main_menu;
   G.UIDEF.profile_select = profile_select;
   G.UIDEF.profile_option = profile_option;
   G.UIDEF.language_selector = language_selector;
@@ -146,9 +151,52 @@ export function register_main_menu_overlays() {
     G.SETTINGS.paused = true;
     G.FUNCS.overlay_menu({ definition: language_selector() });
   };
-  G.FUNCS.beta_lang_alert = () => { /* no beta languages here */ };
+  G.FUNCS.beta_lang_alert = (e: any) => {
+    if (!e.children.alert && e.config.ref_table?.beta) {
+      e.children.alert = new UIBox({
+        definition: create_UIBox_card_alert({ no_bg: true, text: 'BETA', scale: 0.35 }),
+        config: { instance_type: 'ALERT', align: 'tri', offset: { x: 0.07, y: -0.07 }, major: e, parent: e },
+      });
+      e.children.alert.states.collide.can = false;
+    }
+  };
+  G.FUNCS.warn_lang = (e: any) => {
+    const tip = G.OVERLAY_MENU.get_UIE_by_ID('overlay_menu_infotip');
+    const lang = e.config.ref_table;
+    if (tip.config.set !== lang.label) {
+      tip.config.object.remove();
+      tip.config.object = new UIBox({
+        definition: overlay_infotip({ ...[lang.warning[0], lang.warning[1], lang.warning[2]], lang }),
+        config: { offset: { x: 0, y: 0 }, align: 'bm', parent: tip },
+      });
+      tip.config.object.UIRoot.juice_up();
+      tip.config.set = lang.label;
+      e.config.disable_button = true;
+      G.E_MANAGER.add_event(new Event({ trigger: 'after', delay: 0.06, blockable: false, blocking: false, func: () => { play_sound('tarot2', 0.76, 0.4); return true; } }));
+      G.E_MANAGER.add_event(new Event({ trigger: 'after', delay: 0.35, blockable: false, blocking: false, func: () => { e.config.disable_button = null; return true; } }));
+      e.config.button = 'change_lang';
+      play_sound('tarot2', 1, 0.4);
+    }
+  };
+  let changing = false;
   G.FUNCS.change_lang = (e: any) => {
     const lang = e.config.ref_table;
-    if (!lang || lang === G.LANG) G.FUNCS.exit_overlay_menu();
+    if (!lang || lang === G.LANG) { G.FUNCS.exit_overlay_menu(); return; }
+    if (changing) return;
+    // (the game reads its language file there and then; here it is fetched first)
+    changing = true;
+    use_language(lang.key).then(() => {
+      save_settings();
+      G.E_MANAGER.clear_queue();
+      G.FUNCS.wipe_on();
+      G.E_MANAGER.add_event(new Event({
+        no_delete: true, blockable: true, blocking: false,
+        func: () => { delete_run(); main_menu_again(); return true; },
+      }));
+      G.FUNCS.wipe_off();
+    }).catch((err) => {
+      console.error('[language]', err);
+      play_sound('cancel');
+    }).finally(() => { changing = false; });
   };
 }

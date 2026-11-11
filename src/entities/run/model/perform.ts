@@ -5,6 +5,7 @@ import { G, Event } from '@/shared/lib/engine';
 import { api, ApiError, type ActionResult, type GameView, type PlayerAction } from '@/shared/api';
 import { check_and_set_high_score } from '@/shared/config';
 import { recorder } from '@/shared/lib/recorder';
+import { pointer_trace } from '@/shared/lib/pointer-trace';
 import { run, set_view } from './store';
 import { Timeline, type TimelineHooks } from './timeline';
 import { sync_game, reconcile_all } from './sync';
@@ -53,7 +54,7 @@ export async function perform(action: PlayerAction, ch: Choreography = {}, send?
   ch.before?.();
   let result: ActionResult;
   try {
-    result = await (send ? send() : api.act(run.id, action, prev.version));
+    result = await (send ? send() : api.act(run.id, action, prev.version, pointer_trace.take()));
   } catch (err) {
     G.CONTROLLER.locks.api = null;
     run.busy = false;

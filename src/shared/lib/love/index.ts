@@ -67,12 +67,14 @@ export async function loadImage(url: string, opts: { mipmaps?: boolean; dpiscale
   return img;
 }
 
+/** a font dumped by tools/love/fontdump: NAME.json, and its atlas pages NAME.png, NAME_1.png ... */
 export async function loadFont(base: string, name: string): Promise<Font> {
-  const [dump, img] = await Promise.all([
-    fetch(`${base}/${name}.json`).then((r) => r.json() as Promise<FontDump>),
-    loadImage(`${base}/${name}.png`),
-  ]);
-  return new Font(img, dump);
+  const r = await fetch(`${base}/${name}.json`);
+  if (!r.ok) throw new Error(`${base}/${name}.json: ${r.status}`);
+  const dump = (await r.json()) as FontDump;
+  const n = dump.pageH?.length ?? 1;
+  const pages = await Promise.all(Array.from({ length: n }, (_, i) => loadImage(`${base}/${name}${i ? `_${i}` : ''}.png`)));
+  return new Font(pages, dump);
 }
 
 export async function loadShader(url: string, name: string): Promise<Shader> {

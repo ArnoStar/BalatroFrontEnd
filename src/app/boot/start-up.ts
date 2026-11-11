@@ -1,9 +1,8 @@
 // Game:start_up, Game:set_render_settings and Game:set_language (game.lua):
 // textures, shaders, the font, the controller and the shared sprites.
 import { G, Sprite, Controller, EventManager, init_sources, init_window } from '@/shared/lib/engine';
-import { love, loadImage, loadFont, loadShader } from '@/shared/lib/love';
-import { init_localization } from '@/shared/lib/localization';
-import { load_game_data, init_profile, load_settings } from '@/shared/config';
+import { love, loadImage, loadShader } from '@/shared/lib/love';
+import { load_game_data, init_profile, load_settings, init_languages } from '@/shared/config';
 
 // (the game is served under a base path: /play/)
 const RES = `${import.meta.env.BASE_URL}resources`;
@@ -68,16 +67,6 @@ async function set_render_settings(progress: (p: number) => void) {
   G.ASSET_ATLAS.Spectral = G.ASSET_ATLAS.Tarot;
 }
 
-async function set_language() {
-  const font = await loadFont(`${import.meta.env.BASE_URL}fonts`, 'm6x11plus');
-  G.FONTS = [
-    { file: 'resources/fonts/m6x11plus.ttf', render_scale: G.TILESIZE * 10, TEXT_HEIGHT_SCALE: 0.83, TEXT_OFFSET: { x: 10, y: -20 }, FONTSCALE: 0.1, squish: 1, DESCSCALE: 1, FONT: font },
-  ];
-  G.LANGUAGES = { 'en-us': { font: G.FONTS[0], label: 'English', key: 'en-us' } };
-  G.LANG = G.LANGUAGES['en-us'];
-  init_localization();
-}
-
 export async function start_up(progress: (p: number) => void) {
   load_settings();
   G.SETTINGS.version = G.VERSION;
@@ -97,7 +86,7 @@ export async function start_up(progress: (p: number) => void) {
   await Promise.all([
     ...SHADERS.map(async (name) => { G.SHADERS[name] = await loadShader(`${RES}/shaders/${name}.fs`, name); }),
     set_render_settings(progress),
-    set_language(),
+    init_languages(),
   ]);
 
   G.CONTROLLER = new Controller();
