@@ -12,6 +12,7 @@ import { run } from '@/entities/run';
 import { SigningIn } from '@/shared/api';
 import { input_state, key_down, key_up, pointer_down, pointer_move, pointer_up } from '@/shared/lib/input';
 import { recorder } from '@/shared/lib/recorder';
+import { pointer_trace } from '@/shared/lib/pointer-trace';
 import { register_bug_report_funcs, start_replay_if_asked } from '@/features/bug-report';
 import { start_watch_if_asked } from '@/features/watch-run';
 
@@ -93,6 +94,7 @@ function record_state() {
 
 async function main() {
   recorder.install();
+  pointer_trace.install();
   await ensure_signed_in();
   fit_canvas();
   initLove(canvas, `${import.meta.env.BASE_URL}resources/sounds`);

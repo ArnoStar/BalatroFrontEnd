@@ -38,7 +38,7 @@ export function register_all() {
   register_use_card_funcs();
   register_run_lifecycle_funcs();
   init_run_page();
-  register_main_menu_overlays();
+  register_main_menu_overlays(() => main_menu());
   G.main_menu = main_menu;
   // the game's QUIT closes the program; here the main menu's HOME button goes
   // back to the portal (the site's home: the player's runs and account)

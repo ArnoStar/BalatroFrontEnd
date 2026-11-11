@@ -41,6 +41,11 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/reports/, ''),
         headers: { 'X-Forwarded-Prefix': '/reports' },
       },
+      // the item service (make run in ../BalatroItemService) on its default port
+      '/items': {
+        target: process.env.BALATRO_ITEMS ?? 'http://127.0.0.1:8004',
+        rewrite: (path) => path.replace(/^\/items/, ''),
+      },
       // the identity service (make run) on its default port
       '/identity': {
         target: process.env.BALATRO_IDENTITY ?? 'http://127.0.0.1:8001',

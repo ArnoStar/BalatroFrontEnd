@@ -9,6 +9,8 @@
 #             PostgreSQL (identity-db) and Redis (identity-redis)
 #   reports   bug reports from the game (BalatroBugReportService), with its
 #             PostgreSQL (reports-db); the portal passes /reports/ to it
+#   items     the players' collectible items and their trades (BalatroItemService),
+#             with its PostgreSQL (items-db); the portal passes /items/ to it
 #   notification  sends the emails (BalatroNotificationService): the identity
 #             service publishes its confirmation codes to rabbitmq
 #   rabbitmq  the message broker between them (management UI at http://localhost:15672)
@@ -21,8 +23,9 @@
 # The game engine (BalatroEngine) is a library inside the api image, not a service.
 #
 # Lives in BalatroFrontEnd, next to ../BalatroPortal, ../BalatroWebAPI,
-# ../BalatroIndentityService, ../BalatroNotificationService and ../balatro_src
-# (a copy of the game):
+# ../BalatroIndentityService, ../BalatroNotificationService,
+# ../BalatroBugReportService, ../BalatroItemService and ../balatro_src (a copy
+# of the game):
 #
 #   docker compose up --build        # then open http://localhost:8087
 #
@@ -46,6 +49,9 @@
 #   REPORTS_DB_PASSWORD          the reports database's password (set it on a server)
 #   REPORTS_PORT, REPORTS_DB_PORT  the report service's and its database's ports on this
 #                                machine (8003, 55434), for it run outside Docker
+#   ITEMS_DB_PASSWORD            the items database's password (set it on a server)
+#   ITEMS_PORT, ITEMS_DB_PORT    the item service's and its database's ports on this
+#                                machine (8004, 55435), for it run outside Docker
 #   API_DB_PORT                  the API database's port on this machine (55433), for
 #                                the API run outside Docker (its `make db`, `make run`)
 #   EMAIL_BACKEND, EMAIL_FROM, SMTP_*   how the notification service sends the emails
@@ -71,6 +77,8 @@ services:
       IDENTITY_UPSTREAM: http://identity:8000
       # (not a dependency: the site runs without the report service, /reports/ answers 502)
       REPORTS_UPSTREAM: http://reports:8000
+      # (the same: without the item service, /items/ answers 502 and the game shows no items)
+      ITEMS_UPSTREAM: http://items:8000
     ports:
       - "${WEB_PORT:-8087}:80"
     depends_on:
@@ -172,6 +180,42 @@ services:
       - "127.0.0.1:${REPORTS_DB_PORT:-55434}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U reports -d reports"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  items:
+    build:
+      context: ../BalatroItemService
+      network: host
+    environment:
+      BALATRO_ITEMS_DATABASE_URL: postgresql://items:${ITEMS_DB_PASSWORD:-items}@items-db:5432/items
+      # the players' runs (read with their own tokens) and the catalog of jokers and tags
+      BALATRO_ITEMS_API_URL: http://api:8000
+      BALATRO_ITEMS_ADMINS: ${ADMINS:-}
+      BALATRO_ITEMS_AUTH_JWKS_URL: ${BALATRO_API_AUTH_JWKS_URL-http://identity:8000/.well-known/jwks.json}
+      BALATRO_ITEMS_AUTH_ISSUER: ${PUBLIC_URL:-http://localhost:8087}/identity
+      BALATRO_ITEMS_CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:8087}
+    ports:
+      - "127.0.0.1:${ITEMS_PORT:-8004}:8000"
+    depends_on:
+      items-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  items-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: items
+      POSTGRES_PASSWORD: ${ITEMS_DB_PASSWORD:-items}
+      POSTGRES_DB: items
+    volumes:
+      - items-db:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${ITEMS_DB_PORT:-55435}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U items -d items"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -290,6 +334,7 @@ volumes:
   runs:
   api-db:
   reports-db:
+  items-db:
   identity-data:
   identity-db:
   identity-redis:

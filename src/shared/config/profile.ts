@@ -3,6 +3,7 @@
 // and stake last chosen are remembered in this browser.
 import { G } from '@/shared/lib/engine';
 import type { ProgressView } from '@/shared/api';
+import { browser_language } from './languages';
 
 const KEY = 'balatro-fe.memory';
 const PROFILE_KEY = 'balatro-fe.profile';
@@ -102,7 +103,7 @@ const SETTINGS_KEY = 'balatro-fe.settings';
 export function save_settings() {
   const S = G.SETTINGS;
   const keep = {
-    GAMESPEED: S.GAMESPEED, play_button_pos: S.play_button_pos, screenshake: S.screenshake, run_stake_stickers: S.run_stake_stickers,
+    language: S.language, GAMESPEED: S.GAMESPEED, play_button_pos: S.play_button_pos, screenshake: S.screenshake, run_stake_stickers: S.run_stake_stickers,
     colourblind_option: S.colourblind_option, reduced_motion: S.reduced_motion, CUSTOM_DECK: S.CUSTOM_DECK,
     SOUND: { volume: S.SOUND.volume, music_volume: S.SOUND.music_volume, game_sounds_volume: S.SOUND.game_sounds_volume },
     GRAPHICS: { shadows: S.GRAPHICS.shadows, crt: S.GRAPHICS.crt, bloom: S.GRAPHICS.bloom, texture_scaling: S.GRAPHICS.texture_scaling },
@@ -113,8 +114,10 @@ export function save_settings() {
 export function load_settings() {
   let s: any = null;
   try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null'); } catch { s = null; }
-  if (!s || typeof s !== 'object') return;
   const S = G.SETTINGS;
+  // (first start: the browser's language)
+  S.language = typeof s?.language === 'string' ? s.language : browser_language();
+  if (!s || typeof s !== 'object') return;
   if (s.CUSTOM_DECK?.Collabs) Object.assign(S.CUSTOM_DECK.Collabs, s.CUSTOM_DECK.Collabs);
   for (const k of ['GAMESPEED', 'play_button_pos', 'screenshake', 'run_stake_stickers', 'colourblind_option', 'reduced_motion']) {
     if (s[k] !== undefined) S[k] = s[k];

@@ -148,6 +148,16 @@ Fonts rendered in the container differ from a dump made with another FreeType
 by one pixel on six accented letters (Ã Ñ Õ ã ñ õ), which English text never
 uses.
 
+**Languages.** The game's 15 languages, as in the game's language menu; the
+first one is the browser's when the game has it. `npm run assets` extracts
+each language's text (`public/localization`) and dumps, for each of the
+game's fonts, the characters its languages use (`public/fonts`; the Chinese,
+Japanese and Korean fonts with half-size glyph bitmaps, laid out with the
+full size's metrics). A language's text and font are fetched when it is
+picked; until then a small dump has each language's name for the menu. The
+words this front end adds (HOME, the bug report dialog, the watch bar) are
+English.
+
 ## Deployment
 
 `.github/workflows/ci-cd.yml` checks every push and pull request on `main`
@@ -250,9 +260,22 @@ one's own runs, and other players' finished runs unless their profile is
 private). The API makes a copy of the run at its start and gives the player's
 actions in order (`POST /api/v1/games/{id}/watch`); the game plays each one
 through the same functions the player's click called (the selection set, then
-Play, Use, Buy...), so every action has its animations. A bar shows the
+Play, Use, Buy...), so every action has its animations. The pointer is the
+player's own: each action is sent with the player's pointer since the previous
+one (moves, clicks and the cards they selected, `shared/lib/pointer-trace`;
+the API keeps it with the run), and the watch plays it back at the player's
+pace (long pauses shortened). Runs played before it was kept show a pointer
+going to each card and button the action needs. A bar shows the
 progress, with Pause, Next step, Speed and Stop; at the end the copy is the
 viewer's to play on (it isn't listed or counted).
+
+**Items** (BalatroItemService, at `/items/`): the player's collectible jokers
+and tags with the game's editions. They change nothing in a run. The title
+screen shows the player's showcase item in place of the Ace (with its
+edition's shader and the stake sticker of the win it came from), and, each
+time the player comes back to it, reveals the items their runs have just
+earned (`pages/main-menu`). The collection and trading are on the portal's
+`/inventory` and `/trades`.
 
 **To see it again**, a developer (an account with the developer or admin
 role, given in the portal's `/admin`; the first admin with `make admin`) opens the report in
@@ -323,7 +346,7 @@ src/
 
 ## Differences with the game
 
-- English only, one profile. What is unlocked and discovered is the player's
+- One profile. What is unlocked and discovered is the player's
   progress, kept by the API (`GET /players/me`, loaded at each main menu): a new
   account starts like a new save of the game. Testers can switch "unlock
   everything" on in the portal's account page. The profile's other stats (high

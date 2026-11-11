@@ -5,14 +5,17 @@
 // is played here through the same functions the player's click called (the
 // selection is set, then G.FUNCS.play_cards_from_highlighted, use_card,
 // buy_from_shop ...), so every action has the game's own animations. A
-// pointer shows the player's clicks first (the cards selected one by one, the
-// button), at a pace the viewer can follow; nothing moves while a menu has
-// paused the game. The engine is deterministic: the copy goes exactly the way
+// pointer shows the player's clicks first: the player's own pointer, moves,
+// clicks and selections, when the game sent it with the action
+// (shared/lib/pointer-trace), or else the clicks the action needs (the cards
+// selected one by one, the button) at a pace the viewer can follow; nothing
+// moves while a menu has paused the game. The engine is deterministic: the copy goes exactly the way
 // the run went. When it ends, or when the viewer stops it, the copy is theirs
 // to play on.
 import { G } from '@/shared/lib/engine';
 import { api, ApiError, type WatchView } from '@/shared/api';
 import { recorder } from '@/shared/lib/recorder';
+import { pointer_trace, TRACE_AREAS, type PointerEntry } from '@/shared/lib/pointer-trace';
 import { run, perform, timeline_playing } from '@/entities/run';
 import { hud } from '../ui/watch-hud';
 import { ghost, wait } from '../ui/ghost-cursor';
@@ -25,6 +28,9 @@ const SPEEDS = [1, 2, 4];
 const THINK_MS = 900; // a look at the screen before each action
 const MOVE_MS = 380; // the pointer's way to each card or button
 const CLICK_MS = 160; // after each click
+// a recorded pointer: waits longer than this (the player away, or reading) are shortened to it
+const MAX_GAP_MS = 1500;
+const TRACE_SETTLE_MS = 150; // the screen settled, before a recorded pointer starts
 
 /** the first visible UI element whose button is `name` */
 function find_button(name: string, boxes?: any[]): any {
@@ -52,12 +58,14 @@ function card_in(areas: any[], id: number): any {
   return null;
 }
 
-/** the hand's selection, as the player had it */
-function select(ids: number[] | null | undefined): boolean {
+/** the hand's selection, as the player had it (`in_order`: in the player's order too, as a consumable's targets) */
+function select(ids: number[] | null | undefined, in_order = false): boolean {
   const cards = (ids ?? []).map((id) => card_in([G.hand], id));
   if (cards.some((c) => !c)) return false;
-  for (const c of [...G.hand.highlighted]) if (!cards.includes(c)) G.hand.remove_from_highlighted(c, true);
-  for (const c of cards) if (!G.hand.highlighted.includes(c)) G.hand.add_to_highlighted(c, true);
+  const h = G.hand.highlighted;
+  if (h.length === cards.length && cards.every((c, i) => (in_order ? h[i] === c : h.includes(c)))) return true;
+  for (const c of [...h]) G.hand.remove_from_highlighted(c, true);
+  for (const c of cards) G.hand.add_to_highlighted(c, true);
   return true;
 }
 
@@ -72,11 +80,15 @@ function button_click(name: string): Click[] {
   return b ? [{ on: b }] : [];
 }
 
-/** the clicks that make the hand's selection the player's, left to right (null: a card isn't in the hand yet) */
-function selection_clicks(ids: number[] | null | undefined): Click[] | null {
+/**
+ * The clicks that make the hand's selection the player's (null: a card isn't
+ * in the hand yet): left to right for a hand played or discarded (it is sent
+ * in that order), and in the player's order for a consumable's targets.
+ */
+function selection_clicks(ids: number[] | null | undefined, in_order = false): Click[] | null {
   const cards = (ids ?? []).map((id) => card_in([G.hand], id));
   if (cards.some((c) => !c)) return null;
-  cards.sort((a, b) => G.hand.cards.indexOf(a) - G.hand.cards.indexOf(b));
+  if (!in_order) cards.sort((a, b) => G.hand.cards.indexOf(a) - G.hand.cards.indexOf(b));
   const off = G.hand.highlighted.filter((c: any) => !cards.includes(c))
     .map((c: any) => ({ on: c, then: () => G.hand.remove_from_highlighted(c) }));
   const on = cards.filter((c) => !G.hand.highlighted.includes(c))
@@ -112,9 +124,9 @@ function prepare(a: Action): Plan | null {
     case 'end_shop': return G.shop ? { clicks: button_click('toggle_shop'), go: () => G.FUNCS.toggle_shop() } : null;
     case 'use': case 'pick': {
       const card = card_in(a.type === 'use' ? [G.consumeables] : [G.pack_cards], a.card);
-      const picks = card && selection_clicks(a.targets ?? []);
+      const picks = card && selection_clicks(a.targets ?? [], true);
       if (!card || !picks) return null;
-      return { clicks: [...picks, { on: card }], go: () => { select(a.targets ?? []); G.FUNCS.use_card({ config: { ref_table: card } }); } };
+      return { clicks: [...picks, { on: card }], go: () => { select(a.targets ?? [], true); G.FUNCS.use_card({ config: { ref_table: card } }); } };
     }
     case 'sell': {
       const card = card_in([G.jokers, G.consumeables], a.card);
@@ -141,6 +153,29 @@ function prepare(a: Action): Plan | null {
     case 'debug': return { clicks: [], go: () => G.FUNCS.debug_command(a.command) };
   }
   return null;
+}
+
+/** the cards highlighted in an area, as a recorded pointer had them */
+function set_highlighted(area_name: string, ids: number[]) {
+  const area = TRACE_AREAS[area_name]?.();
+  if (!area?.cards) return;
+  const want = ids.map((id) => area.cards.find((c: any) => c.api_id === id)).filter(Boolean);
+  for (const c of [...area.highlighted]) if (!want.includes(c)) area.remove_from_highlighted(c);
+  for (const c of want) if (!area.highlighted.includes(c)) area.add_to_highlighted(c);
+}
+
+/** a recorded pointer's entries on the watch's clock: long waits shortened, in order */
+function squeeze(entries: PointerEntry[]): PointerEntry[] {
+  const out: PointerEntry[] = [];
+  let prev = 0, t = 0;
+  for (const e of entries) {
+    const at = Number(e[0]);
+    if (!Number.isFinite(at)) continue;
+    t += Math.min(MAX_GAP_MS, Math.max(0, at - prev));
+    prev = Math.max(prev, at);
+    out.push([t, ...e.slice(1)]);
+  }
+  return out;
 }
 
 const strip = (x: any) => JSON.stringify(x && typeof x === 'object' ? { ...x, expected_version: undefined } : x);
@@ -201,16 +236,51 @@ class Watch {
   /** the player's pointer stays where it is: the watch is paused (but for one step), or the game is (a menu, not the win screen) */
   private held = () => !this.stopped && ((this.paused && !this.stepping) || (!!G.SETTINGS.paused && !this.endless_button()));
 
-  /** the player's clicks for the action, then the action (`step`: the player's action it is, if one) */
+  /** the player's pointer as recorded: its moves, clicks and selections, on the watch's clock */
+  private follow(entries: PointerEntry[]): Promise<void> {
+    const moves = entries.filter((e) => e[1] === 'm' || e[1] === 'd' || e[1] === 'u');
+    return new Promise((resolve) => {
+      let last = performance.now();
+      let clock = 0, next = 0, m = 0;
+      const frame = (now: number) => {
+        if (this.stopped) { resolve(); return; }
+        if (!this.held()) clock += (now - last) * Math.sqrt(G.SETTINGS.GAMESPEED || 1);
+        last = now;
+        while (next < entries.length && Number(entries[next][0]) <= clock) {
+          const e = entries[next++];
+          if (e[1] === 'd') ghost.click();
+          else if (e[1] === 'h') set_highlighted(String(e[2]), e.slice(3).map(Number));
+        }
+        // between two recorded points (30 a second), the pointer goes straight
+        while (m + 1 < moves.length && Number(moves[m + 1][0]) <= clock) m++;
+        const a = moves[m], b = moves[m + 1];
+        if (a) {
+          const k = b && Number(a[0]) <= clock ? Math.min(1, (clock - Number(a[0])) / Math.max(1, Number(b[0]) - Number(a[0]))) : 0;
+          const ax = Number(a[2]), ay = Number(a[3]);
+          ghost.place_game(b && k > 0 ? ax + (Number(b[2]) - ax) * k : ax, b && k > 0 ? ay + (Number(b[3]) - ay) * k : ay);
+        }
+        if (next >= entries.length) resolve(); else requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    });
+  }
+
+  /** the player's clicks for the action (their recorded pointer, if kept), then the action (`step`: the player's action it is, if one) */
   private async act(plan: Plan, step?: Step) {
     const k = Math.sqrt(G.SETTINGS.GAMESPEED || 1);
-    for (const c of plan.clicks) {
-      await ghost.move(c.on, MOVE_MS / k, this.held);
+    const trace = step?.pointer?.e?.length ? squeeze(step.pointer.e) : null;
+    if (trace) {
+      await this.follow(trace);
       if (this.stopped) return;
-      ghost.click();
-      c.then?.();
-      await wait(CLICK_MS / k, this.held);
-      if (this.stopped) return;
+    } else {
+      for (const c of plan.clicks) {
+        await ghost.move(c.on, MOVE_MS / k, this.held);
+        if (this.stopped) return;
+        ghost.click();
+        c.then?.();
+        await wait(CLICK_MS / k, this.held);
+        if (this.stopped) return;
+      }
     }
     this.acting = false;
     this.stepping = false;
@@ -231,8 +301,10 @@ class Watch {
       const endless = this.endless_button();
       if (!this.idle() && !endless) this.quiet_since = 0;
       else if (!this.quiet_since) this.quiet_since = now;
-      if (this.quiet_since && now - this.quiet_since >= THINK_MS / Math.sqrt(G.SETTINGS.GAMESPEED || 1)) {
-        const step: Step = this.view.steps[this.next];
+      const step: Step = this.view.steps[this.next];
+      // (a recorded pointer has the player's own pause in it)
+      const think = step.pointer?.e?.length ? TRACE_SETTLE_MS : THINK_MS / Math.sqrt(G.SETTINGS.GAMESPEED || 1);
+      if (this.quiet_since && now - this.quiet_since >= think) {
         const plan = endless ? null : prepare(step.action);
         if (endless) {
           this.acting = true;
@@ -272,6 +344,7 @@ class Watch {
     this.stopped = true;
     this.off();
     ghost.hide();
+    pointer_trace.enabled = true;
     G.SETTINGS.GAMESPEED = this.speed_before;
     if (message) hud.message(message);
   }
@@ -303,6 +376,7 @@ export async function start_watch_if_asked() {
     hud.speed(G.SETTINGS.GAMESPEED);
     hud.message('');
     current = new Watch(view);
+    pointer_trace.enabled = false; // (the viewer's pointer isn't the player's)
     ghost.show();
     G.FUNCS.start_run(null, { open_id: view.game.id });
     requestAnimationFrame(current.tick);

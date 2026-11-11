@@ -1,5 +1,7 @@
-// The player's pointer while a run is watched again: it goes to each card and
-// button the action needs, in the player's order, and clicks it.
+// The player's pointer while a run is watched again: where the player's own
+// pointer went (a recorded trace, placed point by point), or, for runs played
+// before traces were kept, a hand-like glide to each card and button the
+// action needs, in the player's order.
 import { G } from '@/shared/lib/engine';
 import { to_screen } from '@/shared/lib/input';
 
@@ -27,15 +29,23 @@ function place(x: number, y: number) {
   if (root) root.style.transform = `translate(${x - 1}px, ${y - 1}px)`;
 }
 
-/** the middle of a card or UI element in the page's pixels (null: gone, or not on the screen yet) */
-export function point_of(node: any): [number, number] | null {
-  const T = node?.VT ?? node?.T;
+/** a point in game units (the room's coordinates) in the page's pixels */
+function page_point(gx: number, gy: number): [number, number] | null {
   const canvas = document.getElementById('screen') as HTMLCanvasElement | null;
-  if (!T || node.REMOVED || !G.ROOM || !canvas?.width) return null;
-  const [px, py] = to_screen(T.x + T.w / 2, T.y + T.h / 2);
+  if (!G.ROOM || !canvas?.width) return null;
+  const [px, py] = to_screen(gx, gy);
   const r = canvas.getBoundingClientRect();
   return [r.left + (px * r.width) / canvas.width, r.top + (py * r.height) / canvas.height];
 }
+
+/** the middle of a card or UI element in the page's pixels (null: gone, or not on the screen yet) */
+export function point_of(node: any): [number, number] | null {
+  const T = node?.VT ?? node?.T;
+  if (!T || node.REMOVED) return null;
+  return page_point(T.x + T.w / 2, T.y + T.h / 2);
+}
+
+let glides = 0;
 
 /** waits `ms` of time that isn't `held` */
 export function wait(ms: number, held: () => boolean): Promise<void> {
@@ -71,9 +81,25 @@ export const ghost = {
 
   hide() { if (root) root.hidden = true; },
 
-  /** glides to `node` in `ms` of time that isn't `held` (it follows the node while it moves) */
+  /** puts the pointer where the player's was (game units) */
+  place_game(gx: number, gy: number) {
+    const p = page_point(gx, gy);
+    if (p) place(p[0], p[1]);
+  },
+
+  /**
+   * Glides to `node` in about `ms` of time that isn't `held` (it follows the
+   * node while it moves): longer for a longer way, on a slight curve, slow at
+   * both ends and fast in the middle, as a hand moves a mouse.
+   */
   move(node: any, ms: number, held: () => boolean): Promise<void> {
     const from = at;
+    const first = point_of(node);
+    const dist = first ? Math.hypot(first[0] - from[0], first[1] - from[1]) : 0;
+    const total = ms * (0.55 + Math.min(0.9, dist / 900));
+    // the curve's side and depth change from one glide to the next
+    const n = ++glides;
+    const bend = (((n * 7919) % 13) / 13 - 0.5) * 0.35;
     return new Promise((resolve) => {
       let last = performance.now();
       let done = 0;
@@ -82,10 +108,12 @@ export const ghost = {
         last = now;
         const to = point_of(node);
         if (!to) { resolve(); return; }
-        const k = Math.min(1, done / ms);
-        const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
-        place(from[0] + (to[0] - from[0]) * e, from[1] + (to[1] - from[1]) * e);
-        if (k >= 1) resolve(); else requestAnimationFrame(frame);
+        const k = Math.min(1, done / Math.max(1, total));
+        const e = k * k * k * (10 - 15 * k + 6 * k * k); // a hand's reach (minimum jerk)
+        const dx = to[0] - from[0], dy = to[1] - from[1];
+        const off = bend * Math.sin(Math.PI * e);
+        place(from[0] + dx * e - dy * off, from[1] + dy * e + dx * off);
+        if (k >= 1) { place(to[0], to[1]); resolve(); } else requestAnimationFrame(frame);
       };
       requestAnimationFrame(frame);
     });

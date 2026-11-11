@@ -12,6 +12,59 @@ import { Card, CardArea } from '@/entities/card';
 import { Back } from '@/entities/back';
 import { init_game_object } from '@/entities/run';
 import { fetch_saved_game } from '@/widgets/run-setup';
+import { cached_showcase, look_for_items } from '../model/items';
+import { item_card, item_tag_sprite, show_found } from './item-cards';
+import type { PlayerItem } from '@/shared/api';
+
+/**
+ * The title screen's card: the Ace of Spades, or the player's showcase item
+ * (BalatroItemService): a joker with its edition and stake sticker, or a tag
+ * on the Ace. Only a picture: items change nothing in a run.
+ */
+function title_card(item: PlayerItem | null, x: number, y: number, w: number, h: number): any {
+  const joker = item ? item_card(item, x, y, w, h) : null;
+  const card = joker ?? new Card(x, y, w, h, G.P_CARDS.S_A, G.P_CENTERS.c_base);
+  if (item && !joker) {
+    const tag = item_tag_sprite(item, 0.9 * w);
+    if (tag) {
+      tag.set_alignment({ major: card, type: 'cm', bond: 'Strong', offset: { x: 0, y: 0 } });
+      card.children.item_tag = tag;
+    }
+  }
+  return card;
+}
+
+/** the player's items, once the title screen is up: new ones revealed, the showcase put on the title */
+function show_items() {
+  const on_menu = () => G.STAGE === G.STAGES.MAIN_MENU && G.MAIN_MENU_UI && !G.screenwipe;
+  void look_for_items({
+    found: (found) => {
+      // (after any menu the player opened: the reveal is an overlay too)
+      G.E_MANAGER.add_event(new Event({
+        blockable: false, blocking: false, no_delete: true,
+        func: () => {
+          if (G.STAGE !== G.STAGES.MAIN_MENU) return true;
+          if (!on_menu() || G.OVERLAY_MENU) return false;
+          show_found(found);
+          return true;
+        },
+      }));
+    },
+    showcase: (item) => {
+      if (!on_menu() || !G.title_top) return;
+      const old = G.title_top.cards[0];
+      if (!old) return;
+      const card = title_card(item, old.T.x, old.T.y, old.T.w, old.T.h);
+      G.title_top.remove_card(old);
+      old.remove();
+      G.title_top.emplace(card);
+      card.no_ui = true;
+      card.ambient_tilt = 0.0;
+      card.start_materialize([G.C.WHITE, G.C.WHITE], undefined, 1.2);
+      play_sound('whoosh1', 0.4, 0.5);
+    },
+  });
+}
 
 function create_UIBox_main_menu_buttons() {
   const text_scale = 0.45;
@@ -123,7 +176,7 @@ export function main_menu(change_context?: 'splash' | 'game') {
   G.SPLASH_LOGO.dissolve_colours = [G.C.WHITE, G.C.WHITE];
   G.SPLASH_LOGO.dissolve = 1;
 
-  const replace_card = new Card(G.title_top.T.x, G.title_top.T.y, 1.2 * G.CARD_W * SC_scale, 1.2 * G.CARD_H * SC_scale, G.P_CARDS.S_A, G.P_CENTERS.c_base);
+  const replace_card = title_card(cached_showcase(), G.title_top.T.x, G.title_top.T.y, 1.2 * G.CARD_W * SC_scale, 1.2 * G.CARD_H * SC_scale);
   G.title_top.emplace(replace_card);
   replace_card.states.visible = false;
   replace_card.no_ui = true;
@@ -169,7 +222,7 @@ export function main_menu(change_context?: 'splash' | 'game') {
 
   G.E_MANAGER.add_event(new Event({
     trigger: 'after', delay: change_context === 'splash' ? 4.05 : change_context === 'game' ? 3 : 1.5, blockable: false, blocking: false,
-    func: () => { set_main_menu_UI(); return true; },
+    func: () => { set_main_menu_UI(); show_items(); return true; },
   }));
 
   new UIBox({
