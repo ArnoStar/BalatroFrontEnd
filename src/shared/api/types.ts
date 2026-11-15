@@ -3,7 +3,7 @@ export type Phase = 'blind_select' | 'playing' | 'round_eval' | 'shop' | 'pack' 
 export type Area = 'deck' | 'hand' | 'play' | 'discard' | 'jokers' | 'consumables' | 'shop' | 'vouchers' | 'boosters' | 'pack';
 export type Slot = 'Small' | 'Big' | 'Boss';
 
-export interface SettingsView { seed: string; deck: string; stake: number; challenge: string | null; game_speed: number }
+export interface SettingsView { seed: string; deck: string; stake: number; challenge: string | null; game_speed: number; seeded?: boolean }
 
 export interface Stickers { eternal: boolean; perishable: number | null; rental: boolean }
 
@@ -70,6 +70,8 @@ export interface GameView {
   id: string; version: number; settings: SettingsView; phase: Phase; state: string; won: boolean;
   ante: number; round: number; dollars: number; hands_left: number; discards_left: number; hand_size: number;
   joker_slots: number; consumable_slots: number; round_score: number | null;
+  /** the cards the shop offers besides vouchers and packs (2; Overstock and Overstock Plus add one each) */
+  shop_slots?: number;
   blind: BlindView | null; blind_select: BlindSelectView | null;
   hand: CardView[]; jokers: CardView[]; consumables: CardView[]; deck: DeckView; discard_count: number;
   shop: ShopView | null; pack: PackView | null; round_eval: RoundEvalView | null;
@@ -94,7 +96,8 @@ export type GameEvent =
   | { type: 'dollars'; t: number; amount: number; total: number }
   | { type: 'status_text'; t: number; text: string }
   /** the joker behind a scored or held card's effect wiggles (juice_card) */
-  | { type: 'card_juiced'; t: number; card: number }
+  /** a card wiggles: juice_up(scale, rot), null: its defaults (APIs before shop_slots: juice_card's 0.7) */
+  | { type: 'card_juiced'; t: number; card: number; scale?: number | null; rot?: number | null }
   /** the card shines with its new edition or seal (Aura, Hex, Deja Vu...); `view` is how it looks */
   | { type: 'card_changed'; t: number; card: number; change: 'edition' | 'seal'; view?: CardView | null }
   /** attention_text over a card; `key` is the text's localization key (k_nope_ex: The Wheel of Fortune missed) */
@@ -149,6 +152,9 @@ export interface ProgressView {
   challenges_unlocked: number;
   deck_stakes: Record<string, number>;
   max_stakes: Record<string, number>;
+  /** the profile's career stats and voucher redemptions: locked cards' unlock conditions show them */
+  career_stats?: Record<string, number>;
+  voucher_usage?: Record<string, number>;
 }
 
 export interface MeView { id: string; name: string | null; private: boolean; progress: ProgressView }

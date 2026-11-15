@@ -3,7 +3,7 @@
 # this one) with hot reload, their logs together in this terminal:
 #
 #   identity-db, identity-redis   Docker (docker-compose.yml)    127.0.0.1:55432, :56379
-#   api-db, reports-db, items-db  Docker                         127.0.0.1:55433, :55434, :55435
+#   api-db, reports-db, items-db, social-db  Docker              127.0.0.1:55433, :55434, :55435, :55436
 #   rabbitmq                      Docker                         :5672 (UI http://localhost:15672)
 #   mailpit (MAIL=1)              Docker                         http://localhost:8025
 #   notification                  ../BalatroNotificationService  http://localhost:8002/health
@@ -11,6 +11,7 @@
 #   api (with sign-in)            ../BalatroWebAPI               http://localhost:8000
 #   reports (with sign-in)        ../BalatroBugReportService     http://localhost:8003/docs
 #   items (with sign-in)          ../BalatroItemService          http://localhost:8004/docs
+#   social (with sign-in)         ../BalatroSocial               http://localhost:8005/docs
 #   game                          this repository                http://localhost:5173/play/
 #   portal                        ../BalatroPortal               http://localhost:5174  <- open this
 #
@@ -32,6 +33,7 @@ notification="$root/BalatroNotificationService"
 api="$root/BalatroWebAPI"
 reports="$root/BalatroBugReportService"
 items="$root/BalatroItemService"
+social="$root/BalatroSocial"
 portal="$root/BalatroPortal"
 compose=(docker compose -f "$game/docker-compose.yml")
 
@@ -49,7 +51,7 @@ port_open() {
 }
 
 # ---------------------------------------------------------------- checks
-for dir in "$identity" "$notification" "$api" "$reports" "$items" "$portal"; do
+for dir in "$identity" "$notification" "$api" "$reports" "$items" "$social" "$portal"; do
   [ -d "$dir" ] || die "$dir is missing: clone it next to $(basename "$game")"
 done
 for tool in uv npm docker; do
@@ -58,12 +60,12 @@ done
 [ -d "$game/public/resources" ] || die "the game's assets are missing: run 'npm run assets' here (needs ../balatro_src)"
 
 busy=()
-for port in 8000 8001 8002 8003 8004 5173 5174; do
+for port in 8000 8001 8002 8003 8004 8005 5173 5174; do
   if port_open "$port"; then busy+=("$port"); fi
 done
 if [ "${#busy[@]}" -gt 0 ]; then
-  die "port(s) ${busy[*]} already in use. The Docker stack uses 8000 to 8004: 'make down'
-       (or 'docker compose stop api reports items identity notification web portal'), or stop the other dev servers"
+  die "port(s) ${busy[*]} already in use. The Docker stack uses 8000 to 8005: 'make down'
+       (or 'docker compose stop api reports items social identity notification web portal'), or stop the other dev servers"
 fi
 
 # dependencies, the first time
@@ -72,11 +74,12 @@ fi
 [ -d "$api/.venv" ] || (cd "$api" && uv sync)
 [ -d "$reports/.venv" ] || (cd "$reports" && uv sync)
 [ -d "$items/.venv" ] || (cd "$items" && uv sync)
+[ -d "$social/.venv" ] || (cd "$social" && uv sync)
 [ -d "$game/node_modules" ] || (cd "$game" && npm install)
 [ -d "$portal/node_modules" ] || (cd "$portal" && npm install)
 
 # ---------------------------------------------------------------- Docker
-services=(identity-db identity-redis rabbitmq api-db reports-db items-db)
+services=(identity-db identity-redis rabbitmq api-db reports-db items-db social-db)
 profiles=()
 if [ "$MAIL" = 1 ]; then
   services+=(mailpit)
@@ -110,10 +113,12 @@ if [ "$AUTH" = 1 ]; then
   start api 34 "$api" env BALATRO_API_ADMINS="${ADMINS:-}" make --no-print-directory run-auth IDENTITY_URL="$IDENTITY_URL"
   start reports 31 "$reports" env BALATRO_REPORTS_ADMINS="${ADMINS:-}" make --no-print-directory run-auth IDENTITY_URL="$IDENTITY_URL"
   start items 93 "$items" env BALATRO_ITEMS_ADMINS="${ADMINS:-}" make --no-print-directory run-auth IDENTITY_URL="$IDENTITY_URL"
+  start social 95 "$social" make --no-print-directory run-auth IDENTITY_URL="$IDENTITY_URL"
 else
   start api 34 "$api" make --no-print-directory run
   start reports 31 "$reports" make --no-print-directory run
   start items 93 "$items" make --no-print-directory run
+  start social 95 "$social" make --no-print-directory run
 fi
 start game 32 "$game" npm run dev --silent
 start portal 33 "$portal" npm run dev --silent
@@ -122,11 +127,11 @@ start portal 33 "$portal" npm run dev --silent
 (
   for _ in $(seq 120); do
     ok=1
-    for port in 8000 8001 8002 8003 8004 5173 5174; do
+    for port in 8000 8001 8002 8003 8004 8005 5173 5174; do
       port_open "$port" || ok=0
     done
     if [ "$ok" = 1 ]; then
-      note "ready: open http://localhost:5174 (game http://localhost:5174/play/, API docs :8000/docs, identity docs :8001/docs, bug reports :8003/docs, items :8004/docs, emails in $([ "$MAIL" = 1 ] && echo 'the inbox :8025' || echo "[notification]'s log"))"
+      note "ready: open http://localhost:5174 (game http://localhost:5174/play/, API docs :8000/docs, identity docs :8001/docs, bug reports :8003/docs, items :8004/docs, social :8005/docs, emails in $([ "$MAIL" = 1 ] && echo 'the inbox :8025' || echo "[notification]'s log"))"
       exit 0
     fi
     sleep 1

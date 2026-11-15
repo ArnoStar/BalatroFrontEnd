@@ -38,8 +38,9 @@ cd "$root/BalatroFrontEnd"
 services=(api web portal notification)
 # the bug report service, once its code is on the server (its own deployment copies it)
 if [ -d "$root/BalatroBugReportService" ]; then services+=(reports); fi
-# the same for the item service
+# the same for the item service and the social service
 if [ -d "$root/BalatroItemService" ]; then services+=(items); fi
+if [ -d "$root/BalatroSocial" ]; then services+=(social); fi
 docker compose up -d --build "${services[@]}"
 for service in "${services[@]}"; do
   cid="$(docker compose ps -q "$service")"

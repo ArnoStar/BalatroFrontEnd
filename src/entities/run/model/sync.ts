@@ -38,6 +38,23 @@ export function sync_settings(view: GameView) {
   G.GAME.challenge_tab = s.challenge ? G.CHALLENGES.find((c: any) => c.id === s.challenge) : null;
 }
 
+/**
+ * change_shop_size (common_events.lua), to the view's number of shop slots:
+ * Overstock's slot widens the shop's joker row (the new cards come with the
+ * action's events).
+ */
+export function change_shop_size(slots: number) {
+  const GAME = G.GAME;
+  if (!GAME.shop || GAME.shop.joker_max === slots) return;
+  GAME.shop.joker_max = slots;
+  const sj = G.shop_jokers;
+  if (sj && sj.cards && !sj.REMOVED) {
+    sj.config.card_limit = slots;
+    sj.T.w = slots * 1.01 * G.CARD_W;
+    G.shop?.recalculate();
+  }
+}
+
 /** copies the view's numbers into G.GAME (no animation) */
 export function sync_game(view: GameView, opts: { keep?: ('dollars' | 'chips')[] } = {}) {
   const GAME = G.GAME;
@@ -54,6 +71,7 @@ export function sync_game(view: GameView, opts: { keep?: ('dollars' | 'chips')[]
   if (G.hand) G.hand.config.card_limit = view.hand_size;
   if (G.jokers) G.jokers.config.card_limit = view.joker_slots;
   if (G.consumeables) G.consumeables.config.card_limit = view.consumable_slots;
+  if (view.shop_slots !== undefined) change_shop_size(view.shop_slots);
 
   GAME.modifiers.no_blind_reward = GAME.modifiers.no_blind_reward ?? {};
   const bs = view.blind_select;

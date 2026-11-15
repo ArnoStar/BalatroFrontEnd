@@ -277,6 +277,15 @@ time the player comes back to it, reveals the items their runs have just
 earned (`pages/main-menu`). The collection and trading are on the portal's
 `/inventory` and `/trades`.
 
+**Friends** (BalatroSocial, at `/social/`): the game tells the social
+service what a signed-in player is doing (in the menu; in a run, its deck,
+stake and ante; watching a run), when it changes and every minute while the
+game is seen (`features/social-presence`): their friends see it on the
+portal's `/friends` and `/chat`. **A shared seed**:
+`/play/?seed=<seed>&deck=<deck>&stake=<stake>` (the chat's *Play this seed*)
+opens the run setup on New Run with the seed, the deck and the stake
+(`features/seed-link`); the player looks, and plays.
+
 **To see it again**, a developer (an account with the developer or admin
 role, given in the portal's `/admin`; the first admin with `make admin`) opens the report in
 the portal (`/bugs`) and clicks *Replay it in the game*, i.e.

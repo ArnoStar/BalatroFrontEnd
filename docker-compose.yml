@@ -11,6 +11,8 @@
 #             PostgreSQL (reports-db); the portal passes /reports/ to it
 #   items     the players' collectible items and their trades (BalatroItemService),
 #             with its PostgreSQL (items-db); the portal passes /items/ to it
+#   social    friends, chat, presence and shared runs (BalatroSocial), with its
+#             PostgreSQL (social-db); the portal passes /social/ to it
 #   notification  sends the emails (BalatroNotificationService): the identity
 #             service publishes its confirmation codes to rabbitmq
 #   rabbitmq  the message broker between them (management UI at http://localhost:15672)
@@ -24,8 +26,8 @@
 #
 # Lives in BalatroFrontEnd, next to ../BalatroPortal, ../BalatroWebAPI,
 # ../BalatroIndentityService, ../BalatroNotificationService,
-# ../BalatroBugReportService, ../BalatroItemService and ../balatro_src (a copy
-# of the game):
+# ../BalatroBugReportService, ../BalatroItemService, ../BalatroSocial and
+# ../balatro_src (a copy of the game):
 #
 #   docker compose up --build        # then open http://localhost:8087
 #
@@ -52,6 +54,9 @@
 #   ITEMS_DB_PASSWORD            the items database's password (set it on a server)
 #   ITEMS_PORT, ITEMS_DB_PORT    the item service's and its database's ports on this
 #                                machine (8004, 55435), for it run outside Docker
+#   SOCIAL_DB_PASSWORD           the social database's password (set it on a server)
+#   SOCIAL_PORT, SOCIAL_DB_PORT  the social service's and its database's ports on this
+#                                machine (8005, 55436), for it run outside Docker
 #   API_DB_PORT                  the API database's port on this machine (55433), for
 #                                the API run outside Docker (its `make db`, `make run`)
 #   EMAIL_BACKEND, EMAIL_FROM, SMTP_*   how the notification service sends the emails
@@ -79,6 +84,8 @@ services:
       REPORTS_UPSTREAM: http://reports:8000
       # (the same: without the item service, /items/ answers 502 and the game shows no items)
       ITEMS_UPSTREAM: http://items:8000
+      # (and without the social service, /social/ answers 502: no friends nor chat)
+      SOCIAL_UPSTREAM: http://social:8000
     ports:
       - "${WEB_PORT:-8087}:80"
     depends_on:
@@ -221,6 +228,41 @@ services:
       retries: 10
     restart: unless-stopped
 
+  social:
+    build:
+      context: ../BalatroSocial
+      network: host
+    environment:
+      BALATRO_SOCIAL_DATABASE_URL: postgresql://social:${SOCIAL_DB_PASSWORD:-social}@social-db:5432/social
+      # the runs players share (read with their own tokens)
+      BALATRO_SOCIAL_API_URL: http://api:8000
+      BALATRO_SOCIAL_AUTH_JWKS_URL: ${BALATRO_API_AUTH_JWKS_URL-http://identity:8000/.well-known/jwks.json}
+      BALATRO_SOCIAL_AUTH_ISSUER: ${PUBLIC_URL:-http://localhost:8087}/identity
+      BALATRO_SOCIAL_CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:8087}
+    ports:
+      - "127.0.0.1:${SOCIAL_PORT:-8005}:8000"
+    depends_on:
+      social-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  social-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: social
+      POSTGRES_PASSWORD: ${SOCIAL_DB_PASSWORD:-social}
+      POSTGRES_DB: social
+    volumes:
+      - social-db:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${SOCIAL_DB_PORT:-55436}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U social -d social"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   identity:
     build:
       context: ../BalatroIndentityService
@@ -335,6 +377,7 @@ volumes:
   api-db:
   reports-db:
   items-db:
+  social-db:
   identity-data:
   identity-db:
   identity-redis:

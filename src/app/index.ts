@@ -15,6 +15,8 @@ import { recorder } from '@/shared/lib/recorder';
 import { pointer_trace } from '@/shared/lib/pointer-trace';
 import { register_bug_report_funcs, start_replay_if_asked } from '@/features/bug-report';
 import { start_watch_if_asked } from '@/features/watch-run';
+import { start_presence } from '@/features/social-presence';
+import { open_seed_link_if_asked } from '@/features/seed-link';
 
 const canvas = document.getElementById('screen') as HTMLCanvasElement;
 
@@ -108,6 +110,8 @@ async function main() {
   show_splash(main_menu);
   void start_replay_if_asked(); // /play/?report=<id> (it waits for the main menu)
   void start_watch_if_asked(); // /play/?watch=<id>
+  start_presence(); // friends see what the player is doing (the social service)
+  void open_seed_link_if_asked(); // /play/?seed=<seed>&deck=<deck>&stake=<stake>: a shared seed
   // the dev server: the game's objects for scripts (scripts/report-e2e.mjs ...)
   if (import.meta.env.DEV) (window as any).__game = { G, run, recorder };
 

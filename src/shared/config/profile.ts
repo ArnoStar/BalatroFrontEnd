@@ -129,6 +129,24 @@ export function load_settings() {
 }
 
 /**
+ * A run's start profile (the engine's Profile JSON, in the run's history) as
+ * the progress apply_progress takes. ``null``: a run from before progress
+ * was kept, fully unlocked.
+ */
+export function progress_of_profile(sp: Record<string, any> | null): ProgressView {
+  const deck_stakes: Record<string, number> = {};
+  for (const [deck, usage] of Object.entries<any>(sp?.deck_usage ?? {})) {
+    const won = Object.keys(usage?.wins ?? {}).map(Number);
+    if (won.length) deck_stakes[deck] = Math.max(...won);
+  }
+  return {
+    all_unlocked: !sp || !!sp.all, can_unlock_all: false, unlocked: sp?.unlocked ?? [], discovered: sp?.discovered ?? [],
+    challenges_completed: sp?.challenges_completed ?? [], challenges_unlocked: 0, deck_stakes, max_stakes: {},
+    career_stats: sp?.career_stats ?? {}, voucher_usage: sp?.voucher_usage ?? {},
+  };
+}
+
+/**
  * The player's progress (GET /players/me) on the game's tables, as the game
  * keeps it in G.PROFILES and the centers' unlocked and discovered flags: the
  * run setup, the collection and the challenges read them. ``null``: a new
@@ -157,6 +175,11 @@ export function apply_progress(view: ProgressView | null) {
     p.deck_usage[deck] = { count: 1, order: G.P_CENTERS[deck]?.order ?? 0, wins, losses: {} };
   }
   p.challenge_progress.completed = Object.fromEntries((view?.challenges_completed ?? []).map((id) => [id, true]));
+  // what the locked cards' unlock conditions count (generate_card_ui: career_stats.c_..., voucher_usage.v_blank.count)
+  if (view?.career_stats) p.career_stats = { ...view.career_stats };
+  if (view?.voucher_usage) {
+    p.voucher_usage = Object.fromEntries(Object.entries(view.voucher_usage).map(([k, count]) => [k, { count, order: G.P_CENTERS[k]?.order ?? k }]));
+  }
   p.challenges_unlocked = all ? G.CHALLENGES?.length : (view?.challenges_unlocked || undefined);
   // game.lua sorts the deck list with the unlocked decks first
   G.P_CENTER_POOLS?.Back?.sort((a: any, b: any) => (a.order - (a.unlocked ? 100 : 0)) - (b.order - (b.unlocked ? 100 : 0)));

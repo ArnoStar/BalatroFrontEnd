@@ -3,7 +3,8 @@
 // wipe_off). A new run is created by the API; an open run is fetched.
 import { G, UIBox, DynaText, Particles, Event, HEX, play_sound, delete_run, pseudorandom_element } from '@/shared/lib/engine';
 import { notify_alert } from '@/shared/ui';
-import { api, type GameView, type NewGameRequest } from '@/shared/api';
+import { api, type GameView, type NewGameRequest, type ProgressView } from '@/shared/api';
+import { apply_progress, progress_of_profile } from '@/shared/config';
 import { recorder } from '@/shared/lib/recorder';
 import { Card } from '@/entities/card';
 import { clear_run, stop_playing } from '@/entities/run';
@@ -90,17 +91,31 @@ export function wipe_off() {
 }
 
 /**
+ * The profile a run is played with, for how its cards show (unlocked or
+ * not): the player's progress, which has what unlocked between runs
+ * (Game:main_menu's career stat checks: a run started from the game over
+ * screen hasn't been through the main menu), or ``start_profile`` (a
+ * report's replay: the reporter's). Undefined: unknown, keep what is shown.
+ */
+function run_progress(start_profile?: Record<string, any> | null): Promise<ProgressView | undefined> {
+  if (start_profile !== undefined) return Promise.resolve(progress_of_profile(start_profile));
+  const late = new Promise<undefined>((done) => setTimeout(() => done(undefined), 4000));
+  return Promise.race([api.me().then((me) => me.progress, () => undefined), late]);
+}
+
+/**
  * G.FUNCS.start_run: wipes the screen while the API creates (or returns) the
  * run. ``continued``: the player continues it from the main menu, which the
  * API is told (Game:start_run with a save: it can unlock Throwback).
  */
-export function start_run(req: NewGameRequest | null, open_id?: string, continued = false) {
+export function start_run(req: NewGameRequest | null, open_id?: string, continued = false, start_profile?: Record<string, any> | null) {
   G.SETTINGS.paused = true;
   // an action of the run being left may still be playing (its timeline survives clear_queue)
   stop_playing();
   G.E_MANAGER.clear_queue();
   wipe_on();
-  const got: { view: GameView | null; error: unknown; unlocked: { key: string; set: string }[] } = { view: null, error: null, unlocked: [] };
+  const got: { view: GameView | null; error: unknown; unlocked: { key: string; set: string }[]; progress?: ProgressView | null } = { view: null, error: null, unlocked: [] };
+  run_progress(start_profile).then((p) => { got.progress = p ?? null; });
   const p = open_id
     ? api.getGame(open_id).then((v) => (continued && v.phase !== 'game_over'
       ? api.act(v.id, { type: 'continue' }, v.version).then((r) => {
@@ -118,7 +133,8 @@ export function start_run(req: NewGameRequest | null, open_id?: string, continue
     trigger: 'immediate', no_delete: true,
     func: () => {
       if (got.error) { G.main_menu('game'); return true; }
-      if (!got.view) return false;
+      if (!got.view || got.progress === undefined) return false;
+      if (got.progress) apply_progress(got.progress);
       // where a bug report's replay can start: this run, opened at this version
       recorder.record('run', { id: got.view.id, version: got.view.version });
       G.start_run_page(got.view);
@@ -136,7 +152,7 @@ export function start_run(req: NewGameRequest | null, open_id?: string, continue
 export function register_run_lifecycle_funcs() {
   G.FUNCS.wipe_on = wipe_on;
   G.FUNCS.wipe_off = wipe_off;
-  G.FUNCS.start_run = (_e: any, args: any = {}) => start_run(args.request ?? {}, args.open_id, !!args.continue);
+  G.FUNCS.start_run = (_e: any, args: any = {}) => start_run(args.request ?? {}, args.open_id, !!args.continue, args.start_profile);
 
   G.FUNCS.go_to_menu = () => {
     G.SETTINGS.paused = true;

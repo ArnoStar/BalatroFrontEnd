@@ -9,7 +9,7 @@ import { localize } from '@/shared/lib/localization';
 import type { CardView, GameEvent, GameView } from '@/shared/api';
 import type { Card, CardArea } from '@/entities/card/@x/run';
 import { find_view } from './store';
-import { area_of } from './sync';
+import { area_of, change_shop_size } from './sync';
 import { card_by_id, register_card, forget_card, create_card, create_back_card, apply_card_view } from './cards';
 import {
   update_hand_text_now, card_eval_status_text_now, ease_dollars_now, ease_chips_now, play_area_status_text_now,
@@ -269,7 +269,7 @@ export class Timeline {
       case 'round_score': ease_chips_now(e.chips); return true;
       case 'dollars': ease_dollars_now(e.amount, e.total); return true;
       case 'status_text': play_area_status_text_now(e.text === 'Not Allowed!' ? localize('k_not_allowed_ex') : e.text); return true;
-      case 'card_juiced': card_by_id(e.card)?.juice_up(0.7); return true;
+      case 'card_juiced': card_by_id(e.card)?.juice_up(e.scale === undefined ? 0.7 : e.scale ?? undefined, e.rot ?? undefined); return true;
       case 'card_changed': this.changed(e); return true;
       case 'attention_text': this.attention(e); return true;
       case 'card_unlocked': this.unlocked(e); return true;
@@ -314,6 +314,8 @@ export class Timeline {
     }
     const from: CardArea | null = card.area ?? null;
     if (from) from.remove_card(card);
+    // Overstock: change_shop_size widens the joker row, then fills its new slots
+    if (to === G.shop_jokers && this.view.shop_slots !== undefined) change_shop_size(this.view.shop_slots);
     const stay = !!e._stay && card.facing === 'back' && FLIPS_ON_EMPLACE(e.to);
     to.emplace(card, null, stay);
     // draw_from_deck_to_hand and draw_from_play_to_hand draw with sort = true
