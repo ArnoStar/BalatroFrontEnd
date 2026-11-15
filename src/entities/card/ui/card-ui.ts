@@ -1,12 +1,56 @@
 // A card's description popup: Card:generate_UIBox_ability_table (card.lua),
 // generate_card_ui (common_events.lua) and the popup layout (G.UIDEF.card_h_popup,
 // desc/info/name rows, badges) from UI_definitions.lua.
-import { G, DynaText, Moveable, mix_colours, lighten, darken, adjust_alpha, tostring } from '@/shared/lib/engine';
+import { G, DynaText, Moveable, mix_colours, lighten, darken, adjust_alpha, tostring, number_format } from '@/shared/lib/engine';
 import { localize } from '@/shared/lib/localization';
+import { profile } from '@/shared/config';
 import { desc_from_rows, info_tip_from_rows, name_from_rows, create_badge, get_badge_colour } from '@/shared/ui';
 import type { Def } from '@/shared/ui';
 
 const prob = () => '' + tostring(G.GAME?.probabilities?.normal ?? 1);
+
+/** generate_card_ui's vars of a locked card's unlock condition: its numbers, and how far the profile is */
+function unlock_loc_vars(_c: any): any[] {
+  const uc = _c.unlock_condition ?? {};
+  const p = profile();
+  const stat = (k: string) => p.career_stats?.[k] ?? 0;
+  const name_text = (key: string) => localize({ type: 'name_text', key, set: 'Enhanced' });
+  switch (_c.name) {
+    case 'Mr. Bones': return [uc.extra, stat('c_losses')];
+    case 'Acrobat': return [uc.extra, stat('c_hands_played')];
+    case 'Sock and Buskin': return [uc.extra, stat('c_face_cards_played')];
+    case 'Swashbuckler': return [uc.extra, stat('c_jokers_sold')];
+    case 'Troubadour': return [uc.extra];
+    case 'Smeared Joker': case 'Glass Joker': return [uc.extra.count, name_text(uc.extra.e_key)];
+    case 'Hanging Chad': case 'The Duo': case 'The Trio': case 'The Family': case 'The Order': case 'The Tribe':
+      return [localize(uc.extra, 'poker_hands')];
+    case 'Rough Gem': case 'Bloodstone': case 'Arrowhead': case 'Onyx Agate':
+      return [uc.extra.count, localize(uc.extra.suit, 'suits_singular')];
+    case 'Showman': case 'Flower Pot': return [uc.ante];
+    case 'Wee Joker': case 'Merry Andy': return [uc.n_rounds];
+    case 'Oops! All 6s': case 'The Idol': case 'Stuntman': return [number_format(uc.chips)];
+    case 'Seeing Double': return [localize('ph_4_7_of_clubs')];
+    case 'Satellite': return [uc.extra];
+    case "Driver's License": return [uc.extra.count];
+    case 'Cartomancer': return [uc.tarot_count];
+    case 'Burnt Joker': return [uc.extra, stat('c_cards_sold')];
+    case 'Bootstraps': return [uc.extra.count];
+    // vouchers
+    case 'Overstock Plus': return [uc.extra, stat('c_shop_dollars_spent')];
+    case 'Liquidation': case 'Glow Up': case 'Petroglyph': case 'Retcon': case 'Palette': return [uc.extra];
+    case 'Tarot Tycoon': return [uc.extra, stat('c_tarots_bought')];
+    case 'Planet Tycoon': return [uc.extra, stat('c_planets_bought')];
+    case 'Reroll Glut': return [uc.extra, stat('c_shop_rerolls')];
+    case 'Omen Globe': return [uc.extra, stat('c_tarot_reading_used')];
+    case 'Observatory': return [uc.extra, stat('c_planetarium_used')];
+    case 'Nacho Tong': return [uc.extra, stat('c_cards_played')];
+    case 'Recyclomancy': return [uc.extra, stat('c_cards_discarded')];
+    case 'Money Tree': return [uc.extra, stat('c_round_interest_cap_streak')];
+    case 'Antimatter': return [uc.extra, p.voucher_usage?.v_blank?.count ?? 0];
+    case 'Illusion': return [uc.extra, stat('c_playing_cards_bought')];
+    default: return [];
+  }
+}
 
 /** Card:generate_UIBox_ability_table */
 export function generate_UIBox_ability_table(card: any) {
@@ -270,7 +314,17 @@ export function generate_card_ui(_c: any, full_UI_table: any, specific_vars?: an
   if (_c.set === 'Other') {
     localize({ type: 'other', key: _c.key, nodes: desc_nodes, vars: specific_vars ?? _c.vars });
   } else if (card_type === 'Locked') {
-    localize({ type: 'unlocks', key: _c.key, set: _c.set, nodes: desc_nodes, vars: loc_vars });
+    if (_c.wip) localize({ type: 'other', key: 'wip_locked', set: 'Other', nodes: desc_nodes, vars: loc_vars });
+    else if (_c.demo && specific_vars) localize({ type: 'other', key: 'demo_shop_locked', nodes: desc_nodes, vars: loc_vars });
+    else if (_c.demo) localize({ type: 'other', key: 'demo_locked', nodes: desc_nodes, vars: loc_vars });
+    else {
+      loc_vars = unlock_loc_vars(_c);
+      if (_c.rarity === 4 && specific_vars && !specific_vars.not_hidden) {
+        localize({ type: 'unlocks', key: 'joker_locked_legendary', set: 'Other', nodes: desc_nodes, vars: loc_vars });
+      } else {
+        localize({ type: 'unlocks', key: _c.key, set: _c.set, nodes: desc_nodes, vars: loc_vars });
+      }
+    }
   } else if (hide_desc) {
     localize({ type: 'other', key: 'undiscovered_' + String(_c.set).toLowerCase(), set: _c.set, nodes: desc_nodes });
   } else if (specific_vars && specific_vars.debuffed) {

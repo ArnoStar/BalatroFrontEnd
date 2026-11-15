@@ -217,7 +217,8 @@ export async function start_replay_if_asked() {
     } else {
       hud.message(`The run at version ${plan.version}. ${with_inputs ? 'No inputs were recorded after it.' : ''}`);
     }
-    G.FUNCS.start_run(null, { open_id: view.id });
+    // (the cards show as the reporter's profile had them: unlocked or not)
+    G.FUNCS.start_run(null, { open_id: view.id, start_profile: report.history.start_profile ?? null });
   } catch (err: any) {
     const code = err?.code;
     hud.message(code === 'not_admin' ? 'Only developers can open reports (BALATRO_REPORTS_ADMINS).'

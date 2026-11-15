@@ -46,6 +46,11 @@ export default defineConfig({
         target: process.env.BALATRO_ITEMS ?? 'http://127.0.0.1:8004',
         rewrite: (path) => path.replace(/^\/items/, ''),
       },
+      // the social service (make run in ../BalatroSocial) on its default port: the game's presence
+      '/social': {
+        target: process.env.BALATRO_SOCIAL ?? 'http://127.0.0.1:8005',
+        rewrite: (path) => path.replace(/^\/social/, ''),
+      },
       // the identity service (make run) on its default port
       '/identity': {
         target: process.env.BALATRO_IDENTITY ?? 'http://127.0.0.1:8001',

@@ -221,8 +221,10 @@ function localStorage_get(k: string) {
 export function run_setup(from_game_over?: string | false) {
   G.run_setup_seed = null;
   const _challenge_chosen = from_game_over === 'challenge_list';
-  const fgo = from_game_over && from_game_over !== 'challenge_list';
-  const _can_continue = !!G.MAIN_MENU_UI && !!saved.game;
+  // (seed_link: a seed shared on the site, /play/?seed=...: the New Run tab, which the link fills in)
+  const _seed_link = from_game_over === 'seed_link';
+  const fgo = from_game_over && from_game_over !== 'challenge_list' && !_seed_link;
+  const _can_continue = !_seed_link && !!G.MAIN_MENU_UI && !!saved.game;
   G.FUNCS.false_ret = () => false;
   const tabs = [
     { label: localize('b_new_run'), chosen: !_challenge_chosen && !_can_continue, tab_definition_function: run_setup_option, tab_definition_function_args: 'New Run' },
@@ -250,7 +252,7 @@ export function register_run_setup_funcs() {
   G.FUNCS.setup_run = (e: any) => {
     G.SETTINGS.paused = true;
     const id = e?.config?.id;
-    const from = (id === 'from_game_over' || id === 'from_game_won' || id === 'challenge_list') ? id : false;
+    const from = (id === 'from_game_over' || id === 'from_game_won' || id === 'challenge_list' || id === 'seed_link') ? id : false;
     G.FUNCS.overlay_menu({ definition: run_setup(from) });
     if (id === 'from_game_over' || id === 'from_game_won') G.OVERLAY_MENU.config.no_esc = true;
   };
