@@ -275,7 +275,8 @@ screen shows the player's showcase item in place of the Ace (with its
 edition's shader and the stake sticker of the win it came from), and, each
 time the player comes back to it, reveals the items their runs have just
 earned (`pages/main-menu`). The collection and trading are on the portal's
-`/inventory` and `/trades`.
+`/inventory` and `/trades`; the casino, where players stake their items
+against each other's, is its own front end (BalatroCasino) at `/casino/`.
 
 **Friends** (BalatroSocial, at `/social/`): the game tells the social
 service what a signed-in player is doing (in the menu; in a run, its deck,
