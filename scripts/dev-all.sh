@@ -13,6 +13,7 @@
 #   items (with sign-in)          ../BalatroItemService          http://localhost:8004/docs
 #   social (with sign-in)         ../BalatroSocial               http://localhost:8005/docs
 #   game                          this repository                http://localhost:5173/play/
+#   casino                        ../BalatroCasino               http://localhost:5174/casino/ (its own :5175)
 #   portal                        ../BalatroPortal               http://localhost:5174  <- open this
 #
 #   make dev            (scripts/dev-all.sh)
@@ -35,6 +36,7 @@ reports="$root/BalatroBugReportService"
 items="$root/BalatroItemService"
 social="$root/BalatroSocial"
 portal="$root/BalatroPortal"
+casino="$root/BalatroCasino"
 compose=(docker compose -f "$game/docker-compose.yml")
 
 MAIL="${MAIL:-0}"
@@ -51,7 +53,7 @@ port_open() {
 }
 
 # ---------------------------------------------------------------- checks
-for dir in "$identity" "$notification" "$api" "$reports" "$items" "$social" "$portal"; do
+for dir in "$identity" "$notification" "$api" "$reports" "$items" "$social" "$portal" "$casino"; do
   [ -d "$dir" ] || die "$dir is missing: clone it next to $(basename "$game")"
 done
 for tool in uv npm docker; do
@@ -60,12 +62,12 @@ done
 [ -d "$game/public/resources" ] || die "the game's assets are missing: run 'npm run assets' here (needs ../balatro_src)"
 
 busy=()
-for port in 8000 8001 8002 8003 8004 8005 5173 5174; do
+for port in 8000 8001 8002 8003 8004 8005 5173 5174 5175; do
   if port_open "$port"; then busy+=("$port"); fi
 done
 if [ "${#busy[@]}" -gt 0 ]; then
   die "port(s) ${busy[*]} already in use. The Docker stack uses 8000 to 8005: 'make down'
-       (or 'docker compose stop api reports items social identity notification web portal'), or stop the other dev servers"
+       (or 'docker compose stop api reports items social identity notification web casino portal'), or stop the other dev servers"
 fi
 
 # dependencies, the first time
@@ -77,6 +79,7 @@ fi
 [ -d "$social/.venv" ] || (cd "$social" && uv sync)
 [ -d "$game/node_modules" ] || (cd "$game" && npm install)
 [ -d "$portal/node_modules" ] || (cd "$portal" && npm install)
+[ -d "$casino/node_modules" ] || (cd "$casino" && npm install)
 
 # ---------------------------------------------------------------- Docker
 services=(identity-db identity-redis rabbitmq api-db reports-db items-db social-db)
@@ -122,16 +125,17 @@ else
 fi
 start game 32 "$game" npm run dev --silent
 start portal 33 "$portal" npm run dev --silent
+start casino 93 "$casino" npm run dev --silent
 
 # the address, once everything answers
 (
   for _ in $(seq 120); do
     ok=1
-    for port in 8000 8001 8002 8003 8004 8005 5173 5174; do
+    for port in 8000 8001 8002 8003 8004 8005 5173 5174 5175; do
       port_open "$port" || ok=0
     done
     if [ "$ok" = 1 ]; then
-      note "ready: open http://localhost:5174 (game http://localhost:5174/play/, API docs :8000/docs, identity docs :8001/docs, bug reports :8003/docs, items :8004/docs, social :8005/docs, emails in $([ "$MAIL" = 1 ] && echo 'the inbox :8025' || echo "[notification]'s log"))"
+      note "ready: open http://localhost:5174 (game http://localhost:5174/play/, casino http://localhost:5174/casino/, API docs :8000/docs, identity docs :8001/docs, bug reports :8003/docs, items :8004/docs, social :8005/docs, emails in $([ "$MAIL" = 1 ] && echo 'the inbox :8025' || echo "[notification]'s log"))"
       exit 0
     fi
     sleep 1

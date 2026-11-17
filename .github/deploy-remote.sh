@@ -41,6 +41,7 @@ if [ -d "$root/BalatroBugReportService" ]; then services+=(reports); fi
 # the same for the item service and the social service
 if [ -d "$root/BalatroItemService" ]; then services+=(items); fi
 if [ -d "$root/BalatroSocial" ]; then services+=(social); fi
+if [ -d "$root/BalatroCasino" ]; then services+=(casino); fi
 docker compose up -d --build "${services[@]}"
 for service in "${services[@]}"; do
   cid="$(docker compose ps -q "$service")"
