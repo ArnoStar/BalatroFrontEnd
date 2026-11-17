@@ -10,11 +10,13 @@
 // (shared/lib/pointer-trace), or else the clicks the action needs (the cards
 // selected one by one, the button) at a pace the viewer can follow; nothing
 // moves while a menu has paused the game. The engine is deterministic: the copy goes exactly the way
-// the run went. When it ends, or when the viewer stops it, the copy is theirs
+// the run went. The viewer only watches: their own clicks and keys don't reach the run, and when it
+// ends (or they stop it) they watch it again or go to the main menu; someone else's run isn't theirs
 // to play on.
 import { G } from '@/shared/lib/engine';
 import { api, ApiError, type WatchView } from '@/shared/api';
 import { recorder } from '@/shared/lib/recorder';
+import { input_state } from '@/shared/lib/input';
 import { pointer_trace, TRACE_AREAS, type PointerEntry } from '@/shared/lib/pointer-trace';
 import { run, perform, timeline_playing } from '@/entities/run';
 import { hud } from '../ui/watch-hud';
@@ -295,7 +297,7 @@ class Watch {
     if (this.stopped) return;
     hud.progress(this.next, this.view.steps.length);
     if (this.next >= this.view.steps.length) {
-      if (this.settled() || this.endless_button()) { this.finish('The end of the run: it is yours to play from here.'); return; }
+      if (this.settled() || this.endless_button()) { this.finish('The end of the run.'); return; }
     } else if (!this.acting && (!this.paused || this.stepping)) {
       const now = performance.now();
       const endless = this.endless_button();
@@ -347,6 +349,17 @@ class Watch {
     pointer_trace.enabled = true;
     G.SETTINGS.GAMESPEED = this.speed_before;
     if (message) hud.message(message);
+    hud.ended({
+      again: () => window.location.reload(),
+      menu: () => {
+        input_state.replaying = false;
+        hud.close();
+        const params = new URLSearchParams(window.location.search);
+        params.delete('watch');
+        history.replaceState(history.state, '', window.location.pathname + (params.size ? `?${params}` : ''));
+        G.FUNCS.go_to_menu();
+      },
+    });
   }
 }
 
@@ -366,7 +379,7 @@ export async function start_watch_if_asked() {
     pause: () => current?.toggle_pause() ?? false,
     step: () => current?.step(),
     speed: () => current?.change_speed() ?? G.SETTINGS.GAMESPEED,
-    stop: () => current?.finish('Stopped: the run is yours to play from here.'),
+    stop: () => current?.finish('Stopped.'),
   });
   hud.message('Loading the run…');
   try {
@@ -377,6 +390,7 @@ export async function start_watch_if_asked() {
     hud.message('');
     current = new Watch(view);
     pointer_trace.enabled = false; // (the viewer's pointer isn't the player's)
+    input_state.replaying = true; // (nor are their clicks and keys: they watch)
     ghost.show();
     G.FUNCS.start_run(null, { open_id: view.game.id });
     requestAnimationFrame(current.tick);

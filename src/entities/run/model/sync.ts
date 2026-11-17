@@ -30,6 +30,8 @@ const SLOTS = ['Small', 'Big', 'Boss'] as const;
 /** the run's settings: deck, stake, challenge, seed, speed */
 export function sync_settings(view: GameView) {
   const s = view.settings;
+  // (the run's deck is unlocked for it: a watched run's too, whatever the viewer has unlocked)
+  if (G.P_CENTERS[s.deck]?.unlocked === false) G.P_CENTERS[s.deck].unlocked = true;
   G.GAME.stake = s.stake;
   G.GAME.selected_back = new Back(G.P_CENTERS[s.deck] ?? G.P_CENTERS.b_red);
   G.GAME.selected_back_key = G.P_CENTERS[s.deck];

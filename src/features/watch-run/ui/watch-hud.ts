@@ -74,4 +74,14 @@ export const hud = {
   progress(done: number, total: number) { if (parts.progress) parts.progress.textContent = `${done} / ${total} actions`; },
   message(text: string) { if (parts.msg) parts.msg.textContent = text; },
   warn(text: string) { if (parts.warn) parts.warn.textContent = text; },
+  /** the replay is over: watch it again, or the main menu (the run is the player's, not the viewer's to play on) */
+  ended(actions: { again: () => void; menu: () => void }) {
+    if (!root) return;
+    for (const b of root.querySelectorAll('.wr-hud__row button')) (b as HTMLButtonElement).hidden = true;
+    const row = el('div', 'wr-hud__row');
+    row.append(button('Watch again', 'wr-btn--blue', actions.again), button('Main menu', '', actions.menu));
+    root.append(row);
+    if (!root.isConnected) document.body.append(root);
+  },
+  close() { root?.remove(); root = null; },
 };

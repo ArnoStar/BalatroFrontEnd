@@ -12,7 +12,7 @@ import { get_stake_sprite } from '@/shared/ui/stake';
 import { get_blind_main_colour } from '@/entities/blind';
 import { Tag } from '@/entities/tag';
 import { card_h_popup } from '@/entities/card';
-import { is_legal } from '@/entities/run';
+import { is_legal, run } from '@/entities/run';
 
 type Slot = 'Small' | 'Big' | 'Boss';
 
@@ -20,7 +20,9 @@ export function create_UIBox_blind_tag(blind_choice: Slot, run_info?: boolean) {
   const rr = G.GAME.round_resets;
   rr.blind_tags = rr.blind_tags ?? {};
   if (!rr.blind_tags[blind_choice]) return null;
-  const tv = rr.blind_tag_views?.[blind_choice];
+  // (the newest view's: the blind select is built during the action that brought it, before sync_game copies it)
+  const latest = run.view?.blind_select?.choices.find((c) => c.slot === blind_choice)?.skip_tag;
+  const tv = latest?.key === rr.blind_tags[blind_choice] ? latest : rr.blind_tag_views?.[blind_choice];
   const _tag = new Tag(rr.blind_tags[blind_choice], false, blind_choice, tv?.orbital_hand ?? null);
   const [_tag_ui, _tag_sprite] = _tag.generate_UI();
   _tag_sprite.states.collide.can = !!run_info;

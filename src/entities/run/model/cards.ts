@@ -25,7 +25,12 @@ export function register_card(id: number, card: Card) {
 
 function center_of(cv: CardView) {
   if (cv.face_down || !cv.key) return G.P_CENTERS.c_base;
-  return G.P_CENTERS[cv.key] ?? G.P_CENTERS.c_base;
+  const center = G.P_CENTERS[cv.key];
+  if (!center) return G.P_CENTERS.c_base;
+  // the API puts only unlocked cards in a run (the pools of the profile it started from, and what it has
+  // unlocked since): one the player's progress here hasn't caught up with isn't shown locked
+  if (center.unlocked === false) center.unlocked = true;
+  return center;
 }
 
 function size_of(center: any): [number, number] {
