@@ -4,7 +4,8 @@
 import { access_token, go_to_sign_in, refresh_session } from './session';
 import { recorder } from '@/shared/lib/recorder';
 import type {
-  ActionResult, GameSummaryView, GameView, HandPreview, HistoryView, MeView, NewGameRequest, PlayerAction, ProblemDetails, WatchView,
+  ActionResult, BlindChoice, GameSummaryView, GameView, HandPreview, HistoryView, MatchSettingsView, MatchView, MeView, NewGameRequest,
+  NewMatchRequest, PlayerAction, ProblemDetails, WatchView,
 } from './types';
 
 export class ApiError extends Error {
@@ -54,8 +55,23 @@ function recorded(body: unknown): unknown {
 /** false once the API refused an action's pointer (an API from before it kept them): sent without it */
 let pointer_accepted = true;
 
+/**
+ * With the API's sign-in off everyone is one player. To try multiplayer alone, `?player=<name>` names
+ * this tab's player (kept for the tab): the API takes the token `dev:<name>` only when sign-in is off.
+ */
+function dev_token(): string | null {
+  try {
+    const q = new URLSearchParams(window.location.search).get('player');
+    if (q && /^[A-Za-z0-9_-]{1,24}$/.test(q)) sessionStorage.setItem('balatro-fe.player', q);
+    const name = sessionStorage.getItem('balatro-fe.player');
+    return name ? `dev:${name}` : null;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const token = await access_token();
+  const token = (await access_token()) ?? dev_token();
   const rid = new_request_id();
   const started = performance.now();
   let res: Response;
@@ -118,4 +134,17 @@ export const api = {
   me: () => request<MeView>('GET', '/players/me'),
   /** watch a run again: a copy at its start and the player's actions */
   watch: (id: string) => request<WatchView>('POST', `/games/${id}/watch`),
+};
+
+/** multiplayer matches: a lobby with an invite code, then the players' runs (PvP) */
+export const matches = {
+  create: (req: NewMatchRequest) => request<MatchView>('POST', '/matches', req),
+  join: (code: string, game_speed: number) => request<MatchView>('POST', '/matches/join', { code, game_speed }),
+  /** the player's match not finished yet (null: none) */
+  current: () => request<MatchView | undefined>('GET', '/matches/current').then((m) => m ?? null),
+  get: (id: string) => request<MatchView>('GET', `/matches/${id}`),
+  settings: (id: string, s: MatchSettingsView) => request<MatchView>('PUT', `/matches/${id}/settings`, s),
+  start: (id: string) => request<MatchView>('POST', `/matches/${id}/start`),
+  vote: (id: string, choice: BlindChoice) => request<MatchView>('POST', `/matches/${id}/vote`, { choice }),
+  leave: (id: string) => request<void>('POST', `/matches/${id}/leave`),
 };

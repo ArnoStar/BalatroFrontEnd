@@ -1,4 +1,4 @@
-export { api, ApiError, api_base } from './client';
+export { api, ApiError, api_base, matches } from './client';
 export { reports, reports_base, type NewReport, type ReportView } from './reports';
 export { items, items_base, type ItemEdition, type ItemsMe, type PlayerItem } from './items';
 export { social, social_base, type Activity } from './social';

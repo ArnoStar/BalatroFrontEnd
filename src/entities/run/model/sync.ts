@@ -36,6 +36,7 @@ export function sync_settings(view: GameView) {
   G.GAME.pseudorandom.seed = s.seed;
   G.GAME.challenge = s.challenge;
   G.GAME.challenge_tab = s.challenge ? G.CHALLENGES.find((c: any) => c.id === s.challenge) : null;
+  G.GAME.mode = s.mode ?? null; // a multiplayer run's rules ('pvp': a lost round goes on, as Mr. Bones' save)
 }
 
 /**

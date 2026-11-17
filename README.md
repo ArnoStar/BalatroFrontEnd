@@ -72,6 +72,21 @@ keep the two in step. In the main menu's profile, a signed-in player sees
 their account's name, with ACCOUNT (the portal's account page) and LOG OUT
 buttons, in place of the local name field.
 
+## Multiplayer
+
+The title screen's MULTIPLAYER button (`features/multiplayer`, not in the
+original game) makes or joins a match of the API's `/matches`: a lobby with an
+invite code (or the link `/play/?match=<code>`), the host's settings, then the
+players' runs. In **PvP** each player plays their own run of the same seed; a
+panel beside the run shows both players' hit points, the other player's run,
+what the match waits for and the timer. The blind's Select and Skip buttons
+send the player's choice to the match and play it once both have chosen;
+Cash Out waits until the other player has finished the round. A run the
+match's timer moved on is opened again as it is now.
+
+With the API's sign-in off, everyone is one player: open the game with
+`?player=<name>` in each tab (kept for the tab) to play a match alone.
+
 ## Run the whole site
 
 The site is six parts, each in its own repository next to this one: the

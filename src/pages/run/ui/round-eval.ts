@@ -8,6 +8,7 @@ import { get_stake_sprite } from '@/shared/ui/stake';
 import type { RoundEvalView } from '@/shared/api';
 import { ease_background_colour_blind, run } from '@/entities/run';
 import { react_tags } from '@/entities/tag';
+import { round_lost_text } from '@/features/multiplayer';
 
 export function create_UIBox_round_evaluation() {
   const width = G.hand.T.w - 2;
@@ -65,7 +66,7 @@ export function add_round_eval_row(config: RowConfig) {
           left_text.push(config.saved
             ? { n: G.UIT.C, config: { padding: 0.05, align: 'cm' }, nodes: [
               { n: G.UIT.R, config: { align: 'cm' }, nodes: [
-                { n: G.UIT.O, config: { object: new DynaText({ string: [' ' + localize('ph_mr_bones') + ' '], colours: [G.C.FILTER], shadow: true, pop_in: 0, scale: 0.5 * scale, silent: true }) } },
+                { n: G.UIT.O, config: { object: new DynaText({ string: [' ' + (G.GAME.mode === 'pvp' ? round_lost_text() : localize('ph_mr_bones')) + ' '], colours: [G.C.FILTER], shadow: true, pop_in: 0, scale: 0.5 * scale, silent: true }) } },
               ] },
             ] }
             : { n: G.UIT.C, config: { padding: 0.05, align: 'cm' }, nodes: [

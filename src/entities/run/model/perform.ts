@@ -60,7 +60,8 @@ export async function perform(action: PlayerAction, ch: Choreography = {}, send?
     run.busy = false;
     recorder.record('action', { phase: 'refused', type: action.type, error: String(err) });
     ch.refused?.(err);
-    if (err instanceof ApiError && err.code === 'illegal_action') {
+    // (a match waiting for the other player refuses an action the same way: nothing changed)
+    if (err instanceof ApiError && (err.code === 'illegal_action' || err.code === 'waiting_for_opponent')) {
       console.warn('[api] refused:', err.message);
     } else {
       console.error('[api]', err);

@@ -3,7 +3,11 @@ export type Phase = 'blind_select' | 'playing' | 'round_eval' | 'shop' | 'pack' 
 export type Area = 'deck' | 'hand' | 'play' | 'discard' | 'jokers' | 'consumables' | 'shop' | 'vouchers' | 'boosters' | 'pack';
 export type Slot = 'Small' | 'Big' | 'Boss';
 
-export interface SettingsView { seed: string; deck: string; stake: number; challenge: string | null; game_speed: number; seeded?: boolean }
+export interface SettingsView {
+  seed: string; deck: string; stake: number; challenge: string | null; game_speed: number; seeded?: boolean;
+  /** a multiplayer run's mode ('pvp': a lost round costs hit points instead of the run) */
+  mode?: string | null;
+}
 
 export interface Stickers { eternal: boolean; perishable: number | null; rental: boolean }
 
@@ -166,4 +170,32 @@ export interface WatchView {
   game: GameView;
   /** `pointer`: the player's pointer before the action, as the game sent it (shared/lib/pointer-trace); null for older runs */
   steps: { version: number; action: Record<string, any>; pointer?: { v: 1; e: (number | string)[][] } | null }[];
+}
+
+// ------------------------------------------------------------------ multiplayer (/matches)
+export type MatchMode = 'pvp' | 'coop';
+export type BlindChoice = 'select' | 'skip';
+export interface NewMatchRequest { mode: MatchMode; deck?: string; stake?: number; seed?: string | null; timer?: number; game_speed?: number }
+export interface MatchSettingsView { deck: string; stake: number; seed: string | null; timer: number }
+export interface MatchPlayerView { seat: number; name: string | null; you: boolean; host: boolean; left: boolean }
+export interface OpponentView {
+  version: number; phase: Phase; state: string; ante: number; round: number; dollars: number; hands_left: number;
+  discards_left: number; hand_size: number; joker_slots: number; round_score: number | string; blind: BlindView | null;
+  jokers: CardView[]; consumables: number; deck_size: number; vouchers: string[]; poker_hands: PokerHandView[]; won: boolean;
+}
+export interface PvPBlindResult {
+  index: number; ante: number; slot: Slot | null; chips: (number | string)[]; target: (number | string)[];
+  lost: boolean[]; skipped: boolean[]; damage: number[]; hp: number[];
+}
+export interface BlindVoteView { index: number; yours: BlindChoice | null; theirs: BlindChoice | null; decision: BlindChoice | null }
+export interface PvPView {
+  start_hp: number; safe_antes: number; loss_damage: number; hp: number[]; blind_index: number; rounds: PvPBlindResult[];
+  vote: BlindVoteView | null; waiting: 'round' | 'vote' | null; opponent_waiting: 'round' | 'vote' | null;
+  deadline: string | null; can_cash_out: boolean; opponent: OpponentView | null;
+}
+export interface MatchResultView { winner: number | null; you_won: boolean; reason: string }
+export interface MatchView {
+  id: string; version: number; code: string; mode: MatchMode; status: 'lobby' | 'playing' | 'finished'; seat: number; host: boolean;
+  settings: MatchSettingsView; players: MatchPlayerView[]; run_id: string | null; run_version: number | null;
+  pvp: PvPView | null; result: MatchResultView | null; server_time: string;
 }
