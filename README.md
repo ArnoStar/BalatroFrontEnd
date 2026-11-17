@@ -84,6 +84,12 @@ send the player's choice to the match and play it once both have chosen;
 Cash Out waits until the other player has finished the round. A run the
 match's timer moved on is opened again as it is now.
 
+A signed-in player invites friends from the lobby (the social service's
+invites). The bell at the top right (`features/notifications`) shows what waits
+for them on the social service, live: friend requests to answer, unread
+messages (read in the portal's chat), invites to a friend's match (Join opens
+its lobby); each new one pops up.
+
 With the API's sign-in off, everyone is one player: open the game with
 `?player=<name>` in each tab (kept for the tab) to play a match alone.
 

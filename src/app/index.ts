@@ -18,6 +18,7 @@ import { start_watch_if_asked } from '@/features/watch-run';
 import { start_presence } from '@/features/social-presence';
 import { open_seed_link_if_asked } from '@/features/seed-link';
 import { open_match_link_if_asked } from '@/features/multiplayer';
+import { start_notifications } from '@/features/notifications';
 
 const canvas = document.getElementById('screen') as HTMLCanvasElement;
 
@@ -112,6 +113,7 @@ async function main() {
   void start_replay_if_asked(); // /play/?report=<id> (it waits for the main menu)
   void start_watch_if_asked(); // /play/?watch=<id>
   start_presence(); // friends see what the player is doing (the social service)
+  void start_notifications(); // friend requests, messages and invites to a match, as they come
   void open_seed_link_if_asked(); // /play/?seed=<seed>&deck=<deck>&stake=<stake>: a shared seed
   void open_match_link_if_asked(); // /play/?match=<code>: an invite to a multiplayer match
   // the dev server: the game's objects for scripts (scripts/report-e2e.mjs ...)

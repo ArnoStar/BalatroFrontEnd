@@ -4,7 +4,7 @@ const CSS = `
 @font-face { font-family: 'm6x11'; src: url('${import.meta.env.BASE_URL}resources/fonts/m6x11plus.ttf'); }
 .mp-root { position: fixed; inset: 0; z-index: 45; display: grid; place-content: safe center; padding: 16px; overflow-y: auto;
   background: rgba(0, 0, 0, 0.55); font: 22px/1.25 m6x11, 'Trebuchet MS', system-ui, sans-serif; color: #fff; }
-.mp-panel { box-sizing: border-box; width: min(620px, calc(100vw - 32px)); display: grid; gap: 12px; padding: 18px 20px;
+.mp-panel { box-sizing: border-box; width: min(620px, calc(100vw - 32px)); display: grid; gap: 9px; padding: 16px 20px;
   border-radius: 14px; background: #3a5055; border: 3px solid #1e2b2d; box-shadow: 0 8px 0 rgba(0, 0, 0, 0.45); }
 .mp-panel h2 { margin: 0; font-size: 38px; font-weight: normal; letter-spacing: 1px; text-shadow: 2px 2px 0 #1e2b2d; }
 .mp-panel h3 { margin: 0; font-size: 26px; font-weight: normal; color: #dfe8e9; }
@@ -25,6 +25,10 @@ const CSS = `
 .mp-code { font-size: 44px; letter-spacing: 6px; color: #eac058; text-shadow: 2px 2px 0 #1e2b2d; }
 .mp-players { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .mp-players li { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 8px; background: #1e2b2d; }
+.mp-players li .mp-btn { margin-left: auto; }
+.mp-btn--small { min-width: 0; padding: 3px 12px; font-size: 18px; }
+.mp-dot { width: 10px; height: 10px; border-radius: 50%; background: #5f7377; }
+.mp-dot--on { background: #4bc292; }
 .mp-tag { padding: 0 6px; border-radius: 6px; font-size: 16px; background: #5f7377; }
 .mp-tag--host { background: #eac058; color: #1e2b2d; }
 .mp-dim { color: #b7c3c5; }

@@ -1,17 +1,17 @@
 // The multiplayer feature's entry points: the MULTIPLAYER button, the PvP run's
 // buttons and panel, and /play/?match=<code> (an invite link).
 import { G } from '@/shared/lib/engine';
-import { matches } from '@/shared/api';
-import { close_lobby, open_lobby, open_match_run } from '../ui/lobby';
+import { join_match, open_lobby, open_match_run } from '../ui/lobby';
 import { start_pvp_hud } from '../ui/pvp-hud';
 import { tr } from '../ui/text';
-import { load_current, mp, set_match } from './match';
+import { load_current, mp } from './match';
 import { register_pvp_funcs } from './pvp';
 
 export function register_multiplayer_funcs() {
   register_pvp_funcs(open_match_run);
   start_pvp_hud();
   G.FUNCS.multiplayer = () => open_lobby();
+  G.FUNCS.multiplayer_join = (code: string) => void join_match(code);
   G.FUNCS.multiplayer_rejoin = () => {
     const m = mp.match;
     if (m?.status === 'playing' && m.run_id) open_match_run(m);
@@ -41,12 +41,5 @@ export async function open_match_link_if_asked() {
   const params = new URLSearchParams(location.search);
   params.delete('match');
   history.replaceState(history.state, '', location.pathname + (params.size ? `?${params}` : '')); // (reloading doesn't join again)
-  open_lobby();
-  try {
-    set_match(await matches.join(code, G.SETTINGS.GAMESPEED ?? 1));
-  } catch (err) {
-    console.warn('[multiplayer] the invite could not be joined', err);
-    close_lobby();
-    open_lobby();
-  }
+  void join_match(code);
 }

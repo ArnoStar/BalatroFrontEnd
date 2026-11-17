@@ -75,6 +75,9 @@ const EN = {
   round_lost_row: 'Round lost',
   opponent: 'Opponent',
   boss_blind: 'Boss Blind',
+  invite_friends: 'Invite friends',
+  invite: 'Invite',
+  invited: 'Invited',
   error: 'Something went wrong: {msg}',
 };
 
@@ -151,6 +154,9 @@ const RU: typeof EN = {
   round_lost_row: 'Раунд проигран',
   opponent: 'Соперник',
   boss_blind: 'Босс-блайнд',
+  invite_friends: 'Пригласить друзей',
+  invite: 'Пригласить',
+  invited: 'Приглашение отправлено',
   error: 'Ошибка: {msg}',
 };
 

@@ -4,7 +4,7 @@
 import { G } from '@/shared/lib/engine';
 import { localize } from '@/shared/lib/localization';
 import { input_state } from '@/shared/lib/input';
-import { matches, type MatchView } from '@/shared/api';
+import { matches, social_api, type FriendView, type MatchView } from '@/shared/api';
 import { mp, on_match, problem, refresh, set_match } from '../model/match';
 import { add_style, button, el } from './style';
 import { tr } from './text';
@@ -103,6 +103,56 @@ function playing_panel(m: MatchView): HTMLElement {
   return panel;
 }
 
+// the player's friends, to invite (signed-in players: the social service)
+const friends: { list: FriendView[] | null; at: number; invited: Set<string>; loading: boolean } = {
+  list: null, at: 0, invited: new Set(), loading: false,
+};
+
+function load_friends(m: MatchView) {
+  if (friends.loading || Date.now() - friends.at < 15_000) return;
+  friends.loading = true;
+  void social_api.signed_in().then(async (yes) => {
+    friends.list = yes ? await social_api.friends() : [];
+  }).catch(() => { friends.list = []; }).finally(() => {
+    friends.at = Date.now();
+    friends.loading = false;
+    shown = null; // (drawn again with them)
+    if (mp.match?.id === m.id) render(mp.match);
+  });
+}
+
+function invite_box(m: MatchView): HTMLElement | null {
+  if (m.players.length >= 2) return null;
+  load_friends(m);
+  if (!friends.list?.length) return null;
+  const box = el('div');
+  box.append(el('h3', undefined, tr('invite_friends')));
+  const list = el('ul', 'mp-players');
+  const online = (f: FriendView) => (f.presence?.online ? 0 : 1);
+  for (const f of [...friends.list].sort((a, b) => online(a) - online(b))) {
+    const li = el('li');
+    li.append(el('span', `mp-dot${f.presence?.online ? ' mp-dot--on' : ''}`), el('span', undefined, f.name ?? '?'));
+    const done = friends.invited.has(`${m.id}:${f.id}`);
+    const b = button(done ? tr('invited') : tr('invite'), done ? 'mp-btn--grey mp-btn--small' : 'mp-btn--blue mp-btn--small', () => {
+      b.disabled = true;
+      void social_api.invite(f.id).then(() => {
+        friends.invited.add(`${m.id}:${f.id}`);
+        b.textContent = tr('invited');
+        b.className = 'mp-btn mp-btn--grey mp-btn--small';
+        b.disabled = false;
+      }, (err) => {
+        b.disabled = false;
+        set_status(tr('error', { msg: problem(err) }), true);
+      });
+    });
+    b.setAttribute('aria-label', `${tr('invite')}: ${f.name ?? '?'}`);
+    li.append(b);
+    list.append(li);
+  }
+  box.append(list);
+  return box;
+}
+
 function lobby_panel(m: MatchView): HTMLElement {
   const panel = el('div', 'mp-panel');
   panel.append(el('h2', undefined, `${tr(m.mode === 'pvp' ? 'pvp' : 'coop')} · ${tr('lobby')}`));
@@ -125,6 +175,8 @@ function lobby_panel(m: MatchView): HTMLElement {
   }
   if (m.players.length < 2) list.append(el('li', 'mp-dim', tr('waiting_player')));
   panel.append(list);
+  const invites = invite_box(m);
+  if (invites) panel.append(invites);
 
   // the settings: the host changes them, the other player sees them
   const s = m.settings;
@@ -230,4 +282,14 @@ export function close_lobby() {
   root = null;
   status_el = null;
   input_state.blocked = false;
+}
+
+/** join a match by its code (an invite) and show its lobby */
+export async function join_match(code: string) {
+  open_lobby();
+  try {
+    set_match(await matches.join(code, G.SETTINGS.GAMESPEED ?? 1));
+  } catch (err) {
+    set_status(tr('error', { msg: problem(err) }), true);
+  }
 }
