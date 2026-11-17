@@ -78,6 +78,8 @@ function create_UIBox_main_menu_buttons() {
       { n: G.UIT.C, config: { align: 'bm' }, nodes: [
         { n: G.UIT.R, config: { align: 'cm', padding: 0.2, r: 0.1, emboss: 0.1, colour: G.C.L_BLACK, mid: true }, nodes: [
           UIBox_button({ id: 'main_menu_play', button: 'setup_run', colour: G.C.BLUE, minw: 3.65, minh: 1.55, label: [localize('b_play_cap')], scale: text_scale * 2, col: true }),
+          // (not in the game: matches against or with another player, features/multiplayer)
+          UIBox_button({ id: 'main_menu_multiplayer', button: 'multiplayer', colour: G.C.RED, minw: 3.2, minh: 1.55, label: [G.UIDEF.multiplayer_label?.() ?? 'MULTIPLAYER'], scale: text_scale * 1.1, col: true }),
           { n: G.UIT.C, config: { align: 'cm' }, nodes: [
             UIBox_button({ button: 'options', colour: G.C.ORANGE, minw: 2.65, minh: 1.35, label: [localize('b_options_cap')], scale: text_scale * 1.2, col: true }),
             G.F_QUIT_BUTTON ? { n: G.UIT.C, config: { align: 'cm', minw: 0.2 }, nodes: [] } : null,

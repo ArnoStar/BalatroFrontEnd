@@ -8,6 +8,7 @@ import { register_select_blind_funcs } from '@/features/select-blind';
 import { register_shop_funcs } from '@/features/shop';
 import { register_use_card_funcs } from '@/features/use-card';
 import { register_run_lifecycle_funcs } from '@/features/run-lifecycle';
+import { register_multiplayer_funcs } from '@/features/multiplayer';
 import { register_hud_funcs } from '@/widgets/hud';
 import { register_blind_select_funcs } from '@/widgets/blind-select';
 import { register_run_setup_funcs } from '@/widgets/run-setup';
@@ -37,6 +38,8 @@ export function register_all() {
   register_shop_funcs();
   register_use_card_funcs();
   register_run_lifecycle_funcs();
+  // (after the run's funcs: a PvP run's Select, Skip and Cash Out go through the match)
+  register_multiplayer_funcs();
   init_run_page();
   register_main_menu_overlays(() => main_menu());
   G.main_menu = main_menu;
