@@ -1,21 +1,27 @@
-// The MULTIPLAYER screen: pick a mode, make a match or join one with its code,
-// then the lobby (the invite code, the players, the host's settings) until the
-// host starts it. A started match opens the player's run.
-import { G } from '@/shared/lib/engine';
+// The MULTIPLAYER menu, drawn as the game's own menus (an overlay like the run
+// setup): pick a mode, make a match or join one with its invite code, then the
+// lobby (the code, the players, friends to invite, the host's settings) until
+// the host starts it. A started match opens the player's run.
+import { G, DynaText, UIBox } from '@/shared/lib/engine';
 import { localize } from '@/shared/lib/localization';
-import { input_state } from '@/shared/lib/input';
-import { matches, type MatchView } from '@/shared/api';
+import { UIBox_button, create_UIBox_generic_options, create_option_cycle, create_text_input } from '@/shared/ui';
+import { matches, social_api, type FriendView, type MatchView } from '@/shared/api';
 import { mp, on_match, problem, refresh, set_match } from '../model/match';
-import { add_style, button, el } from './style';
 import { tr } from './text';
 
 const TIMERS = [60, 120, 180, 300];
 const RULES = { hp: 50, ante: 4, loss: 10 };
 
-let root: HTMLElement | null = null;
+/** what the menu's inputs and texts hold */
+const form = { code: '', seed: '', status: '' };
+let open = false;
+let shown = '';
 let off: (() => void) | null = null;
-let status_el: HTMLElement | null = null;
-let shown: string | null = null; // what the panel shows: 'menu', or the match's id and status
+
+// the player's friends, to invite (signed-in players: the social service)
+const friends: { list: FriendView[] | null; at: number; invited: Set<string>; loading: boolean } = {
+  list: null, at: 0, invited: new Set(), loading: false,
+};
 
 function decks(): { key: string; name: string }[] {
   return Object.values<any>(G.P_CENTERS)
@@ -30,19 +36,252 @@ function stakes(): { level: number; name: string }[] {
     .map((s, i) => ({ level: s.stake_level ?? i + 1, name: localize({ type: 'name_text', key: s.key, set: 'Stake' }) || s.name }));
 }
 
-function set_status(text: string, error = false) {
-  if (!status_el) return;
-  status_el.textContent = text;
-  status_el.className = `mp-status${error ? ' mp-status--error' : ''}`;
+/** a text cut into lines of at most `n` characters */
+function wrap(text: string, n: number): string[] {
+  const out: string[] = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    if (line && (line + ' ' + word).length > n) { out.push(line); line = word; } else line = line ? line + ' ' + word : word;
+  }
+  if (line) out.push(line);
+  return out;
+}
+
+function lines(text: string, n: number, scale: number, colour = G.C.UI.TEXT_LIGHT) {
+  return wrap(text, n).map((l) => ({ n: G.UIT.R, config: { align: 'cm' }, nodes: [
+    { n: G.UIT.T, config: { text: l, scale, colour, shadow: true } },
+  ] }));
+}
+
+function title(text: string) {
+  return { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [
+    { n: G.UIT.O, config: { object: new DynaText({ string: [text], colours: [G.C.UI.TEXT_LIGHT], shadow: true, float: true, bump: true, scale: 0.8, pop_in: 0, silent: true }) } },
+  ] };
+}
+
+function status_row() {
+  return { n: G.UIT.R, config: { align: 'cm', minh: 0.4 }, nodes: [
+    { n: G.UIT.T, config: { ref_table: form, ref_value: 'status', scale: 0.32, colour: G.C.RED, shadow: true } },
+  ] };
+}
+
+function say(text: string) {
+  form.status = wrap(text, 70)[0] ?? '';
 }
 
 async function attempt(fn: () => Promise<unknown>) {
-  set_status('');
+  say('');
   try {
     await fn();
   } catch (err) {
-    set_status(tr('error', { msg: problem(err) }), true);
+    say(tr('error', { msg: problem(err) }));
   }
+}
+
+/** a text field, in a box of its own as the game's screens have them (its draw layers would hide the rest of a menu) */
+function text_field(args: Record<string, unknown>) {
+  return { n: G.UIT.O, config: { object: new UIBox({
+    definition: { n: G.UIT.ROOT, config: { align: 'cm', colour: G.C.CLEAR }, nodes: [create_text_input(args)] },
+    config: { offset: { x: 0, y: 0 } },
+  }) } };
+}
+
+function panel(colour: any, nodes: any[], minw: number) {
+  return { n: G.UIT.C, config: { align: 'tm', r: 0.1, padding: 0.12, colour, emboss: 0.05, minw, minh: 4.2 }, nodes };
+}
+
+// ------------------------------------------------------------------ the screens
+function menu_contents() {
+  const pvp = panel(G.C.BLACK, [
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: tr('pvp'), scale: 0.7, colour: G.C.RED, shadow: true } }] },
+    ...lines(tr('pvp_desc'), 34, 0.3),
+    { n: G.UIT.R, config: { align: 'cm', minh: 0.15 }, nodes: [] },
+    ...lines(tr('pvp_rules', RULES), 40, 0.25, G.C.UI.TEXT_INACTIVE),
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [
+      UIBox_button({ button: 'mp_create_pvp', label: [tr('create')], minw: 3, minh: 0.7, scale: 0.4, colour: G.C.RED }),
+    ] },
+  ], 5);
+  const coop = panel(G.C.BLACK, [
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: tr('coop'), scale: 0.7, colour: G.C.BLUE, shadow: true } }] },
+    ...lines(tr('coop_desc'), 30, 0.3, G.C.UI.TEXT_INACTIVE),
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [
+      UIBox_button({ button: 'nil', label: [tr('create')], minw: 3, minh: 0.7, scale: 0.4, colour: G.C.UI.BACKGROUND_INACTIVE }),
+    ] },
+  ], 4);
+  return [
+    title(tr('title')),
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [
+      pvp, { n: G.UIT.C, config: { minw: 0.2 }, nodes: [] }, coop, { n: G.UIT.C, config: { minw: 0.2 }, nodes: [] }, friend_column(),
+    ] },
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [
+      { n: G.UIT.C, config: { align: 'cm', padding: 0.05 }, nodes: [
+        text_field({ w: 3.2, max_length: 8, all_caps: true, prompt_text: tr('code_placeholder'), ref_table: form, ref_value: 'code', keyboard_offset: 1 }),
+      ] },
+      UIBox_button({ button: 'mp_join', label: [tr('join')], minw: 2, minh: 0.7, scale: 0.4, colour: G.C.BLUE, col: true }),
+    ] },
+    status_row(),
+  ];
+}
+
+function playing_contents(m: MatchView) {
+  const names = m.players.map((p) => p.name ?? '?').join('  vs  ');
+  return [
+    title(tr('title')),
+    ...lines(tr('in_progress'), 50, 0.45),
+    ...lines(`${tr(m.mode === 'pvp' ? 'pvp' : 'coop')}: ${names}`, 50, 0.35, G.C.UI.TEXT_INACTIVE),
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.15 }, nodes: [
+      UIBox_button({ button: 'mp_give_up', label: [tr('give_up')], minw: 3, minh: 0.7, scale: 0.4, colour: G.C.RED, col: true }),
+      { n: G.UIT.C, config: { minw: 0.3 }, nodes: [] },
+      UIBox_button({ button: 'multiplayer_rejoin', label: [tr('rejoin')], minw: 3.6, minh: 0.7, scale: 0.4, colour: G.C.BLUE, col: true }),
+    ] },
+    status_row(),
+  ];
+}
+
+function player_row(name: string, tags: { text: string; colour: any }[]) {
+  return { n: G.UIT.R, config: { align: 'cl', r: 0.1, padding: 0.08, colour: G.C.L_BLACK, minw: 5.4, emboss: 0.05 }, nodes: [
+    { n: G.UIT.C, config: { align: 'cl', minw: 3, maxw: 3 }, nodes: [{ n: G.UIT.T, config: { text: name, scale: 0.38, colour: G.C.UI.TEXT_LIGHT, shadow: true } }] },
+    ...tags.map((t) => ({ n: G.UIT.C, config: { align: 'cm', r: 0.08, padding: 0.05, colour: t.colour }, nodes: [
+      { n: G.UIT.T, config: { text: t.text, scale: 0.28, colour: G.C.UI.TEXT_LIGHT } },
+    ] })),
+  ] };
+}
+
+function load_friends(m: MatchView | null) {
+  if (friends.loading || Date.now() - friends.at < 15_000) return;
+  friends.loading = true;
+  void social_api.signed_in().then(async (yes) => {
+    friends.list = yes ? await social_api.friends() : [];
+  }).catch(() => { friends.list = []; }).finally(() => {
+    friends.at = Date.now();
+    friends.loading = false;
+    if (open && (mp.match?.id ?? null) === (m?.id ?? null)) render(mp.match, true);
+  });
+}
+
+/** the menu's friends: invite one, and a PvP match is made for the two of you */
+function friend_column() {
+  load_friends(null);
+  const online = (f: FriendView) => (f.presence?.online ? 0 : 1);
+  const list = [...(friends.list ?? [])].sort((a, b) => online(a) - online(b)).slice(0, 6);
+  return panel(G.C.BLACK, [
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: tr('play_with_friend'), scale: 0.4, colour: G.C.GOLD, shadow: true } }] },
+    ...(list.length ? list.map((f) => ({ n: G.UIT.R, config: { align: 'cm', padding: 0.03 }, nodes: [
+      { n: G.UIT.C, config: { align: 'cm', r: 0.05, minw: 0.18, minh: 0.18, colour: f.presence?.online ? G.C.GREEN : G.C.UI.BACKGROUND_INACTIVE }, nodes: [] },
+      { n: G.UIT.C, config: { align: 'cl', minw: 1.9, maxw: 1.9, padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: f.name ?? '?', scale: 0.3, colour: G.C.UI.TEXT_LIGHT } }] },
+      UIBox_button({ button: 'mp_invite_new', ref_table: f, label: [tr('invite')], minw: 1.5, minh: 0.42, scale: 0.28, colour: G.C.BLUE, col: true }),
+    ] })) : lines(friends.list ? tr('no_friends') : tr('loading'), 24, 0.28, G.C.UI.TEXT_INACTIVE)),
+  ], 4);
+}
+
+function invite_rows(m: MatchView): any[] {
+  if (m.players.length >= 2) return [];
+  load_friends(m);
+  if (!friends.list?.length) return [];
+  const online = (f: FriendView) => (f.presence?.online ? 0 : 1);
+  return [
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: tr('invite_friends'), scale: 0.35, colour: G.C.UI.TEXT_LIGHT, shadow: true } }] },
+    ...[...friends.list].sort((a, b) => online(a) - online(b)).slice(0, 5).map((f) => {
+      const done = friends.invited.has(`${m.id}:${f.id}`);
+      return { n: G.UIT.R, config: { align: 'cm', padding: 0.03 }, nodes: [
+        { n: G.UIT.C, config: { align: 'cm', r: 0.05, minw: 0.18, minh: 0.18, colour: f.presence?.online ? G.C.GREEN : G.C.UI.BACKGROUND_INACTIVE }, nodes: [] },
+        { n: G.UIT.C, config: { align: 'cl', minw: 2.8, maxw: 2.8, padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: f.name ?? '?', scale: 0.33, colour: G.C.UI.TEXT_LIGHT } }] },
+        UIBox_button({ button: done ? 'nil' : 'mp_invite', ref_table: f, label: [done ? tr('invited') : tr('invite')], minw: 2.2, minh: 0.45, scale: 0.3, colour: done ? G.C.UI.BACKGROUND_INACTIVE : G.C.BLUE, col: true }),
+      ] };
+    }),
+  ];
+}
+
+function setting(label: string, value: string) {
+  return { n: G.UIT.R, config: { align: 'cm', padding: 0.04 }, nodes: [
+    { n: G.UIT.C, config: { align: 'cl', minw: 1.6 }, nodes: [{ n: G.UIT.T, config: { text: label, scale: 0.33, colour: G.C.UI.TEXT_LIGHT } }] },
+    { n: G.UIT.C, config: { align: 'cm', minw: 3.2, r: 0.1, padding: 0.06, colour: G.C.L_BLACK }, nodes: [{ n: G.UIT.T, config: { text: value, scale: 0.33, colour: G.C.UI.TEXT_LIGHT } }] },
+  ] };
+}
+
+function settings_rows(m: MatchView): any[] {
+  const s = m.settings;
+  const d = decks(), st = stakes();
+  const deck_name = d.find((x) => x.key === s.deck)?.name ?? s.deck;
+  const stake_name = st.find((x) => x.level === s.stake)?.name ?? String(s.stake);
+  if (!m.host) {
+    return [setting(tr('deck'), deck_name), setting(tr('stake'), stake_name), setting(tr('timer'), tr('seconds', { n: s.timer })),
+      setting(tr('seed'), s.seed ?? tr('seed_random'))];
+  }
+  form.seed = s.seed ?? '';
+  return [
+    create_option_cycle({ label: tr('deck'), scale: 0.7, w: 4.2, options: d.map((x) => x.name), current_option: Math.max(1, d.findIndex((x) => x.key === s.deck) + 1), opt_callback: 'mp_set_deck', colour: G.C.RED }),
+    { n: G.UIT.R, config: { align: 'cm' }, nodes: [
+      { n: G.UIT.C, config: { align: 'cm' }, nodes: [
+        create_option_cycle({ label: tr('stake'), scale: 0.7, w: 3, options: st.map((x) => x.name), current_option: Math.max(1, st.findIndex((x) => x.level === s.stake) + 1), opt_callback: 'mp_set_stake', colour: G.C.RED }),
+      ] },
+      { n: G.UIT.C, config: { align: 'cm' }, nodes: [
+        create_option_cycle({ label: tr('timer'), scale: 0.7, w: 1.8, options: TIMERS.map((t) => tr('seconds', { n: t })), current_option: Math.max(1, TIMERS.indexOf(s.timer) + 1), opt_callback: 'mp_set_timer', colour: G.C.RED }),
+      ] },
+    ] },
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [
+      { n: G.UIT.C, config: { align: 'cm', minw: 1.4 }, nodes: [{ n: G.UIT.T, config: { text: tr('seed'), scale: 0.33, colour: G.C.UI.TEXT_LIGHT } }] },
+      { n: G.UIT.C, config: { align: 'cm' }, nodes: [
+        text_field({ w: 2.6, max_length: 8, all_caps: true, prompt_text: tr('seed_random'), ref_table: form, ref_value: 'seed', keyboard_offset: 1 }),
+      ] },
+      UIBox_button({ button: 'mp_set_seed', label: [tr('set')], minw: 1.4, minh: 0.55, scale: 0.3, colour: G.C.BLUE, col: true }),
+    ] },
+  ];
+}
+
+function lobby_contents(m: MatchView) {
+  const players: any[] = m.players.map((p) => player_row(p.name ?? '?', [
+    ...(p.you ? [{ text: tr('you'), colour: G.C.BLUE }] : []),
+    ...(p.host ? [{ text: tr('host'), colour: G.C.GOLD }] : []),
+  ]));
+  if (m.players.length < 2) players.push({ n: G.UIT.R, config: { align: 'cm', padding: 0.08 }, nodes: [{ n: G.UIT.T, config: { text: tr('waiting_player'), scale: 0.33, colour: G.C.UI.TEXT_INACTIVE } }] });
+  const left = { n: G.UIT.C, config: { align: 'tm', padding: 0.1, r: 0.1, colour: G.C.BLACK, emboss: 0.05, minw: 6 }, nodes: [
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: tr('invite_code'), scale: 0.33, colour: G.C.UI.TEXT_LIGHT } }] },
+    { n: G.UIT.R, config: { align: 'cm' }, nodes: [
+      { n: G.UIT.O, config: { object: new DynaText({ string: [m.code], colours: [G.C.GOLD], shadow: true, float: true, scale: 0.9, pop_in: 0, silent: true, spacing: 1 }) } },
+    ] },
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.08 }, nodes: [
+      UIBox_button({ button: 'mp_copy_link', label: [tr('copy_link')], minw: 2.6, minh: 0.5, scale: 0.32, colour: G.C.GREY }),
+    ] },
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: tr('players'), scale: 0.35, colour: G.C.UI.TEXT_LIGHT, shadow: true } }] },
+    ...players,
+    ...invite_rows(m),
+  ] };
+  const right = { n: G.UIT.C, config: { align: 'tm', padding: 0.1, r: 0.1, colour: G.C.BLACK, emboss: 0.05, minw: 6 }, nodes: [
+    ...settings_rows(m),
+    { n: G.UIT.R, config: { align: 'cm', minh: 0.15 }, nodes: [] },
+    ...lines(tr('pvp_rules', RULES), 48, 0.24, G.C.UI.TEXT_INACTIVE),
+  ] };
+  return [
+    title(`${tr(m.mode === 'pvp' ? 'pvp' : 'coop')} - ${tr('lobby')}`),
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [left, { n: G.UIT.C, config: { minw: 0.2 }, nodes: [] }, right] },
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [
+      UIBox_button({ button: 'mp_leave', label: [tr('leave')], minw: 3, minh: 0.8, scale: 0.45, colour: G.C.RED, col: true }),
+      { n: G.UIT.C, config: { minw: 0.3 }, nodes: [] },
+      m.host
+        ? UIBox_button({ button: m.players.length >= 2 ? 'mp_start' : 'nil', label: [tr('start')], minw: 4, minh: 0.8, scale: 0.5, colour: m.players.length >= 2 ? G.C.GREEN : G.C.UI.BACKGROUND_INACTIVE, col: true })
+        : { n: G.UIT.C, config: { align: 'cm', minw: 4 }, nodes: [{ n: G.UIT.T, config: { text: tr('waiting_host'), scale: 0.35, colour: G.C.UI.TEXT_INACTIVE } }] },
+    ] },
+    status_row(),
+  ];
+}
+
+// ------------------------------------------------------------------ showing it
+function key_of(m: MatchView | null) {
+  if (!m || m.status === 'finished') return `menu:${friends.at}`;
+  return `${m.id}:${m.status}:${m.version}`;
+}
+
+function render(m: MatchView | null, force = false) {
+  if (!open) return;
+  const key = key_of(m);
+  if (!force && key === shown) return;
+  // (not under the player's typing, for a change of the same screen)
+  const same_screen = shown.split(':').slice(0, 2).join(':') === key.split(':').slice(0, 2).join(':');
+  if (!force && G.CONTROLLER.text_input_hook && same_screen) return;
+  shown = key;
+  const contents = !m || m.status === 'finished' ? menu_contents() : m.status === 'lobby' ? lobby_contents(m) : playing_contents(m);
+  G.FUNCS.overlay_menu({ definition: create_UIBox_generic_options({ back_func: 'mp_close', contents, minw: 12 }) });
 }
 
 /** a started match: its run on screen */
@@ -52,182 +291,92 @@ export function open_match_run(m: MatchView) {
   G.FUNCS.start_run(null, { open_id: m.run_id });
 }
 
-function menu_panel(): HTMLElement {
-  const panel = el('div', 'mp-panel');
-  panel.append(el('h2', undefined, tr('title')));
-  const modes = el('div', 'mp-modes');
-  const pvp = el('div', 'mp-mode mp-mode--pvp');
-  pvp.append(el('div', 'mp-mode__name', tr('pvp')), el('p', undefined, tr('pvp_desc')),
-    el('p', 'mp-rules', tr('pvp_rules', RULES)),
-    button(tr('create'), 'mp-btn--red', () => attempt(async () => {
-      set_match(await matches.create({ mode: 'pvp', game_speed: G.SETTINGS.GAMESPEED ?? 1 }));
-    })));
-  pvp.querySelector('button')?.setAttribute('aria-label', `${tr('create')}: ${tr('pvp')}`);
-  const coop = el('div', 'mp-mode mp-mode--coop mp-mode--off');
-  const coop_btn = button(tr('create'), 'mp-btn--blue', () => {});
-  coop_btn.disabled = true;
-  coop_btn.setAttribute('aria-label', `${tr('create')}: ${tr('coop')}`);
-  coop.append(el('div', 'mp-mode__name', tr('coop')), el('p', undefined, tr('coop_desc')), coop_btn);
-  modes.append(pvp, coop);
-  panel.append(modes);
-
-  const join = el('div', 'mp-row');
-  const code = el('input', 'mp-input');
-  code.placeholder = tr('code_placeholder');
-  code.maxLength = 8;
-  code.autocomplete = 'off';
-  code.setAttribute('aria-label', tr('code_placeholder'));
-  const go = () => attempt(async () => {
-    set_match(await matches.join(code.value.trim(), G.SETTINGS.GAMESPEED ?? 1));
-  });
-  code.onkeydown = (e) => { if (e.key === 'Enter') void go(); };
-  join.append(code, button(tr('join'), 'mp-btn--blue', () => void go()));
-  panel.append(join);
-  return panel;
-}
-
-function playing_panel(m: MatchView): HTMLElement {
-  const panel = el('div', 'mp-panel');
-  panel.append(el('h2', undefined, tr('title')), el('p', undefined, tr('in_progress')));
-  const names = m.players.map((p) => p.name ?? '?').join(' vs ');
-  panel.append(el('p', 'mp-dim', `${tr(m.mode === 'pvp' ? 'pvp' : 'coop')}: ${names}`));
-  const row = el('div', 'mp-buttons');
-  row.append(
-    button(tr('give_up'), 'mp-btn--red', () => {
-      if (!confirm(tr('give_up_confirm'))) return;
-      void attempt(async () => { await matches.leave(m.id); await refresh(); });
-    }),
-    button(tr('rejoin'), 'mp-btn--blue', () => open_match_run(m)),
-  );
-  panel.append(row);
-  return panel;
-}
-
-function lobby_panel(m: MatchView): HTMLElement {
-  const panel = el('div', 'mp-panel');
-  panel.append(el('h2', undefined, `${tr(m.mode === 'pvp' ? 'pvp' : 'coop')} · ${tr('lobby')}`));
-  const code_row = el('div', 'mp-row');
-  const copy = button(tr('copy_link'), 'mp-btn--grey', () => {
-    const url = `${location.origin}${location.pathname}?match=${m.code}`;
-    navigator.clipboard?.writeText(url).then(() => { copy.textContent = tr('copied'); }, () => {});
-  });
-  code_row.append(el('label', undefined, tr('invite_code')), el('span', 'mp-code', m.code), copy);
-  panel.append(code_row);
-
-  panel.append(el('h3', undefined, tr('players')));
-  const list = el('ul', 'mp-players');
-  for (const p of m.players) {
-    const li = el('li');
-    li.append(el('span', undefined, p.name ?? '?'));
-    if (p.you) li.append(el('span', 'mp-tag', tr('you')));
-    if (p.host) li.append(el('span', 'mp-tag mp-tag--host', tr('host')));
-    list.append(li);
-  }
-  if (m.players.length < 2) list.append(el('li', 'mp-dim', tr('waiting_player')));
-  panel.append(list);
-
-  // the settings: the host changes them, the other player sees them
-  const s = m.settings;
-  const change = (patch: Partial<typeof s>) => attempt(async () => {
-    set_match(await matches.settings(m.id, { ...s, ...patch }));
-  });
-  const select = (label: string, options: [string, string][], value: string, on: (v: string) => void) => {
-    const row = el('div', 'mp-row');
-    const sel = el('select', 'mp-select');
-    sel.setAttribute('aria-label', label);
-    for (const [v, text] of options) {
-      const o = el('option', undefined, text);
-      o.value = v;
-      sel.append(o);
-    }
-    sel.value = value;
-    sel.disabled = !m.host;
-    sel.onchange = () => on(sel.value);
-    row.append(el('label', undefined, label), sel);
-    return row;
-  };
-  panel.append(
-    select(tr('deck'), decks().map((d) => [d.key, d.name]), s.deck, (v) => void change({ deck: v })),
-    select(tr('stake'), stakes().map((st) => [String(st.level), st.name]), String(s.stake), (v) => void change({ stake: Number(v) })),
-    select(tr('timer'), TIMERS.map((t) => [String(t), tr('seconds', { n: t })]), String(s.timer), (v) => void change({ timer: Number(v) })),
-  );
-  const seed_row = el('div', 'mp-row');
-  const seed = el('input', 'mp-input');
-  seed.value = s.seed ?? '';
-  seed.placeholder = tr('seed_random');
-  seed.maxLength = 8;
-  seed.disabled = !m.host;
-  seed.setAttribute('aria-label', tr('seed'));
-  seed.onchange = () => {
-    const v = seed.value.trim().toUpperCase();
-    void change({ seed: /^[A-Z0-9]{1,8}$/.test(v) ? v : null });
-  };
-  seed_row.append(el('label', undefined, tr('seed')), seed);
-  panel.append(seed_row);
-  panel.append(el('p', 'mp-rules', tr('pvp_rules', RULES)));
-
-  status_el = el('p', 'mp-status');
-  panel.append(status_el);
-  if (!m.host) set_status(tr('waiting_host'));
-  const row = el('div', 'mp-buttons');
-  row.append(button(tr('leave'), 'mp-btn--grey', () => attempt(async () => {
-    await matches.leave(m.id);
-    set_match(null);
-  })));
-  if (m.host) {
-    const start = button(tr('start'), 'mp-btn--green', () => attempt(async () => {
-      set_match(await matches.start(m.id));
-    }));
-    start.disabled = m.players.length < 2;
-    row.append(start);
-  }
-  panel.append(row);
-  return panel;
-}
-
-function render(m: MatchView | null) {
-  if (!root) return;
-  const was = shown;
-  const key = !m || m.status === 'finished' ? 'menu' : `${m.id}:${m.status}:${m.version}`;
-  if (key === was) return;
-  // (not under the player's typing, for a change of the same screen)
-  const focused = document.activeElement;
-  if (m && was?.startsWith(`${m.id}:${m.status}:`) && focused instanceof HTMLInputElement && root.contains(focused)) return;
-  shown = key;
-  const error = status_el?.classList.contains('mp-status--error') ? status_el.textContent ?? '' : '';
-  status_el = null;
-  const panel = !m || m.status === 'finished' ? menu_panel() : m.status === 'lobby' ? lobby_panel(m) : playing_panel(m);
-  const buttons = panel.querySelector('.mp-buttons') ?? panel.appendChild(el('div', 'mp-buttons'));
-  buttons.prepend(button(tr('close'), 'mp-btn--grey', () => close_lobby()));
-  if (!status_el) {
-    status_el = el('p', 'mp-status');
-    panel.insertBefore(status_el, buttons);
-  }
-  if (error) set_status(error, true);
-  root.replaceChildren(panel);
-}
-
 export function open_lobby() {
-  add_style();
-  close_lobby();
-  shown = null;
-  root = el('div', 'mp-root');
-  root.setAttribute('role', 'dialog');
-  root.setAttribute('aria-label', tr('title'));
-  root.onclick = (e) => { if (e.target === root) close_lobby(); };
-  root.onkeydown = (e) => { if (e.key === 'Escape') close_lobby(); };
-  document.body.append(root);
-  input_state.blocked = true;
+  open = true;
+  shown = '';
+  form.status = '';
+  G.SETTINGS.paused = true;
+  off?.();
   off = on_match((m) => render(m));
-  render(mp.match);
+  render(mp.match, true);
   void refresh();
 }
 
 export function close_lobby() {
+  if (!open) return;
+  open = false;
   off?.();
   off = null;
-  root?.remove();
-  root = null;
-  status_el = null;
-  input_state.blocked = false;
+  G.CONTROLLER.text_input_hook = null;
+  if (G.OVERLAY_MENU) G.FUNCS.exit_overlay_menu();
+}
+
+/** join a match by its code (an invite) and show its lobby */
+export async function join_match(code: string) {
+  open_lobby();
+  await attempt(async () => { set_match(await matches.join(code, G.SETTINGS.GAMESPEED ?? 1)); });
+}
+
+export function register_lobby_funcs() {
+  const F = G.FUNCS;
+  F.mp_close = () => close_lobby();
+  F.mp_create_pvp = () => attempt(async () => { set_match(await matches.create({ mode: 'pvp', game_speed: G.SETTINGS.GAMESPEED ?? 1 })); });
+  F.mp_join = () => {
+    G.CONTROLLER.text_input_hook = null;
+    const code = form.code.trim();
+    if (code.length < 4) { say(tr('code_placeholder')); return; }
+    void join_match(code);
+  };
+  const change = (patch: Record<string, unknown>) => {
+    const m = mp.match;
+    if (!m) return;
+    void attempt(async () => { set_match(await matches.settings(m.id, { ...m.settings, ...patch } as typeof m.settings)); });
+  };
+  F.mp_set_deck = (args: any) => change({ deck: decks()[args.to_key - 1]?.key });
+  F.mp_set_stake = (args: any) => change({ stake: stakes()[args.to_key - 1]?.level });
+  F.mp_set_timer = (args: any) => change({ timer: TIMERS[args.to_key - 1] });
+  F.mp_set_seed = () => {
+    G.CONTROLLER.text_input_hook = null;
+    const v = form.seed.trim().toUpperCase();
+    change({ seed: /^[A-Z0-9]{1,8}$/.test(v) ? v : null });
+  };
+  F.mp_copy_link = () => {
+    const m = mp.match;
+    if (!m) return;
+    void navigator.clipboard?.writeText(`${location.origin}${location.pathname}?match=${m.code}`).then(() => say(tr('copied')), () => undefined);
+  };
+  F.mp_invite = (e: any) => {
+    const f = e.config.ref_table as FriendView;
+    const m = mp.match;
+    if (!m) return;
+    void attempt(async () => {
+      await social_api.invite(f.id);
+      friends.invited.add(`${m.id}:${f.id}`);
+      render(mp.match, true);
+    });
+  };
+  F.mp_invite_new = (e: any) => {
+    const f = e.config.ref_table as FriendView;
+    void attempt(async () => {
+      const m = await matches.create({ mode: 'pvp', game_speed: G.SETTINGS.GAMESPEED ?? 1 });
+      await social_api.invite(f.id);
+      friends.invited.add(`${m.id}:${f.id}`);
+      set_match(m);
+    });
+  };
+  F.mp_leave = () => {
+    const m = mp.match;
+    if (!m) return;
+    void attempt(async () => { await matches.leave(m.id); set_match(null); });
+  };
+  F.mp_start = () => {
+    const m = mp.match;
+    if (!m) return;
+    void attempt(async () => { set_match(await matches.start(m.id)); });
+  };
+  F.mp_give_up = () => {
+    const m = mp.match;
+    if (!m) return;
+    void attempt(async () => { await matches.leave(m.id); await refresh(); });
+  };
 }

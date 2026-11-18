@@ -25,7 +25,12 @@ export function register_card(id: number, card: Card) {
 
 function center_of(cv: CardView) {
   if (cv.face_down || !cv.key) return G.P_CENTERS.c_base;
-  return G.P_CENTERS[cv.key] ?? G.P_CENTERS.c_base;
+  const center = G.P_CENTERS[cv.key];
+  if (!center) return G.P_CENTERS.c_base;
+  // the API puts only unlocked cards in a run (the pools of the profile it started from, and what it has
+  // unlocked since): one the player's progress here hasn't caught up with isn't shown locked
+  if (center.unlocked === false) center.unlocked = true;
+  return center;
 }
 
 function size_of(center: any): [number, number] {
@@ -37,14 +42,15 @@ function size_of(center: any): [number, number] {
  * a new card for a CardView, at (x, y). `fresh`: the card is new to the run,
  * so its edition shows as the game shows a new card's (sound and shine).
  */
-export function create_card(cv: CardView, x = 0, y = 0, fresh = false): Card {
+export function create_card(cv: CardView, x = 0, y = 0, fresh = false, register = true): Card {
   const center = center_of(cv);
   const front = cv.kind === 'playing_card' && cv.card_key ? G.P_CARDS[cv.card_key] : undefined;
   const [w, h] = size_of(center);
   const card = new Card(x, y, w, h, front, center, {
     playing_card: cv.kind === 'playing_card' ? 1 : undefined, bypass_discovery_center: true, bypass_discovery_ui: true,
   });
-  register_card(cv.id, card);
+  // (`register` false: a card of another run, shown only, as a PvP opponent's joker)
+  if (register) register_card(cv.id, card);
   apply_card_view(card, cv, fresh);
   if (cv.face_down) { card.facing = 'back'; card.sprite_facing = 'back'; }
   return card;

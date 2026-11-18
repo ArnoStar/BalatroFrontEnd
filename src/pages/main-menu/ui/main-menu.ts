@@ -78,13 +78,17 @@ function create_UIBox_main_menu_buttons() {
       { n: G.UIT.C, config: { align: 'bm' }, nodes: [
         { n: G.UIT.R, config: { align: 'cm', padding: 0.2, r: 0.1, emboss: 0.1, colour: G.C.L_BLACK, mid: true }, nodes: [
           UIBox_button({ id: 'main_menu_play', button: 'setup_run', colour: G.C.BLUE, minw: 3.65, minh: 1.55, label: [localize('b_play_cap')], scale: text_scale * 2, col: true }),
-          // (not in the game: matches against or with another player, features/multiplayer)
-          UIBox_button({ id: 'main_menu_multiplayer', button: 'multiplayer', colour: G.C.RED, minw: 3.2, minh: 1.55, label: [G.UIDEF.multiplayer_label?.() ?? 'MULTIPLAYER'], scale: text_scale * 1.1, col: true }),
-          { n: G.UIT.C, config: { align: 'cm' }, nodes: [
-            UIBox_button({ button: 'options', colour: G.C.ORANGE, minw: 2.65, minh: 1.35, label: [localize('b_options_cap')], scale: text_scale * 1.2, col: true }),
-            G.F_QUIT_BUTTON ? { n: G.UIT.C, config: { align: 'cm', minw: 0.2 }, nodes: [] } : null,
-            // (the game's QUIT: here HOME, back to the portal, see G.FUNCS.quit)
-            G.F_QUIT_BUTTON ? UIBox_button({ button: 'quit', colour: G.C.RED, minw: 2.65, minh: 1.35, label: ['HOME'], scale: text_scale * 1.2, col: true }) : null,
+          // (not in the game: MULTIPLAYER, features/multiplayer, over OPTIONS and HOME: the row stays as wide as the game's)
+          { n: G.UIT.C, config: { align: 'cm', padding: 0.05 }, nodes: [
+            { n: G.UIT.R, config: { align: 'cm' }, nodes: [
+              UIBox_button({ id: 'main_menu_multiplayer', button: 'multiplayer', colour: G.C.PURPLE, minw: 5.5, minh: 0.62, label: [G.UIDEF.multiplayer_label?.() ?? 'MULTIPLAYER'], scale: text_scale * 1.05, col: true }),
+            ] },
+            { n: G.UIT.R, config: { align: 'cm' }, nodes: [
+              UIBox_button({ button: 'options', colour: G.C.ORANGE, minw: 2.65, minh: 0.85, label: [localize('b_options_cap')], scale: text_scale * 1.2, col: true }),
+              G.F_QUIT_BUTTON ? { n: G.UIT.C, config: { align: 'cm', minw: 0.2 }, nodes: [] } : null,
+              // (the game's QUIT: here HOME, back to the portal, see G.FUNCS.quit)
+              G.F_QUIT_BUTTON ? UIBox_button({ button: 'quit', colour: G.C.RED, minw: 2.65, minh: 0.85, label: ['HOME'], scale: text_scale * 1.2, col: true }) : null,
+            ] },
           ] },
           UIBox_button({ id: 'collection_button', button: 'your_collection', colour: G.C.PALE_GREEN, minw: 3.65, minh: 1.55, label: [localize('b_collection_cap')], scale: text_scale * 1.5, col: true }),
         ] },

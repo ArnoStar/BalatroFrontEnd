@@ -75,6 +75,16 @@ const EN = {
   round_lost_row: 'Round lost',
   opponent: 'Opponent',
   boss_blind: 'Boss Blind',
+  invite_friends: 'Invite friends',
+  play_with_friend: 'Play with a friend',
+  no_friends: 'Add friends on the site to invite them here',
+  loading: 'Loading...',
+  your_jokers: 'Your jokers',
+  their_jokers: "{name}'s jokers",
+  their_deck: "{name}'s deck",
+  set: 'Set',
+  invite: 'Invite',
+  invited: 'Invited',
   error: 'Something went wrong: {msg}',
 };
 
@@ -151,6 +161,16 @@ const RU: typeof EN = {
   round_lost_row: 'Раунд проигран',
   opponent: 'Соперник',
   boss_blind: 'Босс-блайнд',
+  invite_friends: 'Пригласить друзей',
+  play_with_friend: 'Играть с другом',
+  no_friends: 'Добавьте друзей на сайте, чтобы звать их сюда',
+  loading: 'Загрузка...',
+  your_jokers: 'Ваши джокеры',
+  their_jokers: 'Джокеры: {name}',
+  their_deck: 'Колода: {name}',
+  set: 'OK',
+  invite: 'Пригласить',
+  invited: 'Приглашение отправлено',
   error: 'Ошибка: {msg}',
 };
 

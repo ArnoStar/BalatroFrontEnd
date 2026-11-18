@@ -76,13 +76,22 @@ buttons, in place of the local name field.
 
 The title screen's MULTIPLAYER button (`features/multiplayer`, not in the
 original game) makes or joins a match of the API's `/matches`: a lobby with an
-invite code (or the link `/play/?match=<code>`), the host's settings, then the
-players' runs. In **PvP** each player plays their own run of the same seed; a
-panel beside the run shows both players' hit points, the other player's run,
-what the match waits for and the timer. The blind's Select and Skip buttons
+invite code (or the link `/play/?match=<code>`; friends are invited from the
+menu or the lobby), the host's settings, then the players' runs, all drawn as
+the game's own menus. In **PvP** each player plays their own run of the same
+seed; a board beside the run shows both players' hit points, the other
+player's run, what the match waits for and the timer; a button under the joker
+row shows the other player's jokers in their place, and the full deck screen
+has a tab with their deck. The blind's Select and Skip buttons
 send the player's choice to the match and play it once both have chosen;
 Cash Out waits until the other player has finished the round. A run the
 match's timer moved on is opened again as it is now.
+
+A signed-in player invites friends from the lobby (the social service's
+invites). The bell at the top right (`features/notifications`) shows what waits
+for them on the social service, live: friend requests to answer, unread
+messages (read in the portal's chat), invites to a friend's match (Join opens
+its lobby); each new one pops up.
 
 With the API's sign-in off, everyone is one player: open the game with
 `?player=<name>` in each tab (kept for the tab) to play a match alone.
