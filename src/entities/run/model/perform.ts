@@ -26,6 +26,13 @@ export interface Choreography {
 /** called when the run must be rebuilt from the API (version conflict, network error) */
 export const resync = { handler: null as null | ((view: GameView) => void) };
 
+/**
+ * An action someone else made in this run (a coop partner's), played here with
+ * its animations: the next perform() takes this result instead of sending its
+ * action (features/multiplayer sets it, then calls the action's own G.FUNCS).
+ */
+export const spectate = { next: null as ActionResult | null };
+
 /** the timeline being played, if any */
 export const playing: { tl: Timeline | null } = { tl: null };
 
@@ -53,8 +60,10 @@ export async function perform(action: PlayerAction, ch: Choreography = {}, send?
   recorder.record('action', { phase: 'start', type: action.type, action, version: prev.version });
   ch.before?.();
   let result: ActionResult;
+  const watched = spectate.next;
+  spectate.next = null;
   try {
-    result = await (send ? send() : api.act(run.id, action, prev.version, pointer_trace.take()));
+    result = watched ?? await (send ? send() : api.act(run.id, action, prev.version, pointer_trace.take()));
   } catch (err) {
     G.CONTROLLER.locks.api = null;
     run.busy = false;

@@ -34,6 +34,8 @@ export interface CardView {
   sell_value: number | null;
   bonus_chips: number | null;
   ability: Record<string, any> | null;
+  /** coop: the seat of the player whose joker it is */
+  owner?: number | null;
 }
 
 export interface TagView { key: string; name: string; orbital_hand: string | null }
@@ -81,6 +83,8 @@ export interface GameView {
   shop: ShopView | null; pack: PackView | null; round_eval: RoundEvalView | null;
   tags: TagView[]; vouchers: string[]; poker_hands: PokerHandView[]; last_hand: HandScore | null; info: RunInfo;
   actions: LegalAction[];
+  /** a coop run: whose turn it is, the jokers' halves (`actions` are your seat's) */
+  coop?: CoopView | null;
 }
 
 export interface GameSummaryView {
@@ -107,7 +111,11 @@ export type GameEvent =
   /** attention_text over a card; `key` is the text's localization key (k_nope_ex: The Wheel of Fortune missed) */
   | { type: 'attention_text'; t: number; card: number; key: string }
   /** the player has just unlocked a joker, voucher or deck (the game's "Unlocked!" notification) */
-  | { type: 'card_unlocked'; t: number; key: string; set: string };
+  | { type: 'card_unlocked'; t: number; key: string; set: string }
+  /** coop: the turn passes to this seat (their hand comes up) */
+  | { type: 'turn'; t: number; seat: number }
+  /** coop: who has asked to leave the shop */
+  | { type: 'shop_vote'; t: number; seats: number[] };
 
 export interface ActionResult { game: GameView; events: GameEvent[] }
 
@@ -200,4 +208,13 @@ export interface MatchView {
   id: string; version: number; code: string; mode: MatchMode; status: 'lobby' | 'playing' | 'finished'; seat: number; host: boolean;
   settings: MatchSettingsView; players: MatchPlayerView[]; run_id: string | null; run_version: number | null;
   pvp: PvPView | null; result: MatchResultView | null; server_time: string;
+  coop?: CoopMatchView | null;
 }
+
+export interface CoopView {
+  seat: number | null; turn: number; your_turn: boolean; joker_slots: number[]; shop_votes: number[];
+  pack_seat: number | null; seats: { deck: number; hand: number }[];
+}
+export interface CoopMatchView { turn: number; your_turn: boolean; selection: number[]; selection_seq: number; over: boolean }
+export interface CoopStep { version: number; seat: number; action: Record<string, any>; events: GameEvent[]; game: GameView }
+export interface CoopStepsView { steps: CoopStep[]; complete: boolean }

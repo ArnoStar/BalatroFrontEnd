@@ -87,8 +87,21 @@ send the player's choice to the match and play it once both have chosen;
 Cash Out waits until the other player has finished the round. A run the
 match's timer moved on is opened again as it is now.
 
-A signed-in player invites friends from the lobby (the social service's
-invites). The bell at the top right (`features/notifications`) shows what waits
+In **Coop** both players play one run in turns and see the same table
+(`model/coop.ts`, `ui/coop-board.ts`). On your turn, the cards you select are
+sent to the match and your partner sees them selected; on theirs, your hand
+can't be selected and the blind's buttons say whose turn it is. Your partner's
+actions come back as the match's steps (each with what the game showed) and
+are played here through the game's own functions, with their animations
+(`entities/run`'s `spectate`: perform() takes the step's result instead of
+sending the action); one that can't be (a debug command, a screen that isn't
+there) loads the run again. After a hand, the hands switch (the timeline's
+`turn` event). The board shows whose turn it is, both players' jokers and
+decks and the shop's leaving (both must press Next Round); your partner's
+jokers have their name under them, and only their owner sells or moves them.
+
+A signed-in player invites friends from the lobby, or from the menu's friend
+list with a new PvP or Coop match (the social service's invites). The bell at the top right (`features/notifications`) shows what waits
 for them on the social service, live: friend requests to answer, unread
 messages (read in the portal's chat), invites to a friend's match (Join opens
 its lobby); each new one pops up.
