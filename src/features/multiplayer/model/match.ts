@@ -50,9 +50,21 @@ export async function refresh(): Promise<MatchView | null> {
   return mp.match;
 }
 
+let poll_ms = POLL_MS;
+
 export function start_polling() {
   if (timer) return;
-  timer = setInterval(() => { void refresh(); }, POLL_MS);
+  timer = setInterval(() => { void refresh(); }, poll_ms);
+}
+
+/** how often the match is read (a coop partner's turn is watched closely) */
+export function set_poll_interval(ms: number) {
+  if (ms === poll_ms) return;
+  poll_ms = ms;
+  if (timer) {
+    stop_polling();
+    start_polling();
+  }
 }
 
 export function stop_polling() {

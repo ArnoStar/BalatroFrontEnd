@@ -103,11 +103,13 @@ function menu_contents() {
   ], 5);
   const coop = panel(G.C.BLACK, [
     { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: tr('coop'), scale: 0.7, colour: G.C.BLUE, shadow: true } }] },
-    ...lines(tr('coop_desc'), 30, 0.3, G.C.UI.TEXT_INACTIVE),
+    ...lines(tr('coop_desc'), 30, 0.3),
+    { n: G.UIT.R, config: { align: 'cm', minh: 0.15 }, nodes: [] },
+    ...lines(tr('coop_rules'), 34, 0.25, G.C.UI.TEXT_INACTIVE),
     { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [
-      UIBox_button({ button: 'nil', label: [tr('create')], minw: 3, minh: 0.7, scale: 0.4, colour: G.C.UI.BACKGROUND_INACTIVE }),
+      UIBox_button({ button: 'mp_create_coop', label: [tr('create')], minw: 3, minh: 0.7, scale: 0.4, colour: G.C.BLUE }),
     ] },
-  ], 4);
+  ], 4.4);
   return [
     title(tr('title')),
     { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [
@@ -159,7 +161,7 @@ function load_friends(m: MatchView | null) {
   });
 }
 
-/** the menu's friends: invite one, and a PvP match is made for the two of you */
+/** the menu's friends: invite one, and a PvP or coop match is made for the two of you */
 function friend_column() {
   load_friends(null);
   const online = (f: FriendView) => (f.presence?.online ? 0 : 1);
@@ -168,8 +170,10 @@ function friend_column() {
     { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: tr('play_with_friend'), scale: 0.4, colour: G.C.GOLD, shadow: true } }] },
     ...(list.length ? list.map((f) => ({ n: G.UIT.R, config: { align: 'cm', padding: 0.03 }, nodes: [
       { n: G.UIT.C, config: { align: 'cm', r: 0.05, minw: 0.18, minh: 0.18, colour: f.presence?.online ? G.C.GREEN : G.C.UI.BACKGROUND_INACTIVE }, nodes: [] },
-      { n: G.UIT.C, config: { align: 'cl', minw: 1.9, maxw: 1.9, padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: f.name ?? '?', scale: 0.3, colour: G.C.UI.TEXT_LIGHT } }] },
-      UIBox_button({ button: 'mp_invite_new', ref_table: f, label: [tr('invite')], minw: 1.5, minh: 0.42, scale: 0.28, colour: G.C.BLUE, col: true }),
+      { n: G.UIT.C, config: { align: 'cl', minw: 1.5, maxw: 1.5, padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: f.name ?? '?', scale: 0.3, colour: G.C.UI.TEXT_LIGHT } }] },
+      UIBox_button({ button: 'mp_invite_new', ref_table: f, label: [tr('pvp')], minw: 0.95, minh: 0.42, scale: 0.28, colour: G.C.RED, col: true }),
+      { n: G.UIT.C, config: { minw: 0.05 }, nodes: [] },
+      UIBox_button({ button: 'mp_invite_new_coop', ref_table: f, label: [tr('coop')], minw: 0.95, minh: 0.42, scale: 0.28, colour: G.C.BLUE, col: true }),
     ] })) : lines(friends.list ? tr('no_friends') : tr('loading'), 24, 0.28, G.C.UI.TEXT_INACTIVE)),
   ], 4);
 }
@@ -205,7 +209,8 @@ function settings_rows(m: MatchView): any[] {
   const deck_name = d.find((x) => x.key === s.deck)?.name ?? s.deck;
   const stake_name = st.find((x) => x.level === s.stake)?.name ?? String(s.stake);
   if (!m.host) {
-    return [setting(tr('deck'), deck_name), setting(tr('stake'), stake_name), setting(tr('timer'), tr('seconds', { n: s.timer })),
+    return [setting(tr('deck'), deck_name), setting(tr('stake'), stake_name),
+      ...(m.mode === 'pvp' ? [setting(tr('timer'), tr('seconds', { n: s.timer }))] : []),
       setting(tr('seed'), s.seed ?? tr('seed_random'))];
   }
   form.seed = s.seed ?? '';
@@ -215,9 +220,9 @@ function settings_rows(m: MatchView): any[] {
       { n: G.UIT.C, config: { align: 'cm' }, nodes: [
         create_option_cycle({ label: tr('stake'), scale: 0.7, w: 3, options: st.map((x) => x.name), current_option: Math.max(1, st.findIndex((x) => x.level === s.stake) + 1), opt_callback: 'mp_set_stake', colour: G.C.RED }),
       ] },
-      { n: G.UIT.C, config: { align: 'cm' }, nodes: [
+      ...(m.mode !== 'pvp' ? [] : [{ n: G.UIT.C, config: { align: 'cm' }, nodes: [
         create_option_cycle({ label: tr('timer'), scale: 0.7, w: 1.8, options: TIMERS.map((t) => tr('seconds', { n: t })), current_option: Math.max(1, TIMERS.indexOf(s.timer) + 1), opt_callback: 'mp_set_timer', colour: G.C.RED }),
-      ] },
+      ] }]),
     ] },
     { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [
       { n: G.UIT.C, config: { align: 'cm', minw: 1.4 }, nodes: [{ n: G.UIT.T, config: { text: tr('seed'), scale: 0.33, colour: G.C.UI.TEXT_LIGHT } }] },
@@ -250,7 +255,7 @@ function lobby_contents(m: MatchView) {
   const right = { n: G.UIT.C, config: { align: 'tm', padding: 0.1, r: 0.1, colour: G.C.BLACK, emboss: 0.05, minw: 6 }, nodes: [
     ...settings_rows(m),
     { n: G.UIT.R, config: { align: 'cm', minh: 0.15 }, nodes: [] },
-    ...lines(tr('pvp_rules', RULES), 48, 0.24, G.C.UI.TEXT_INACTIVE),
+    ...lines(m.mode === 'coop' ? tr('coop_rules') : tr('pvp_rules', RULES), 48, 0.24, G.C.UI.TEXT_INACTIVE),
   ] };
   return [
     title(`${tr(m.mode === 'pvp' ? 'pvp' : 'coop')} - ${tr('lobby')}`),
@@ -321,6 +326,7 @@ export function register_lobby_funcs() {
   const F = G.FUNCS;
   F.mp_close = () => close_lobby();
   F.mp_create_pvp = () => attempt(async () => { set_match(await matches.create({ mode: 'pvp', game_speed: G.SETTINGS.GAMESPEED ?? 1 })); });
+  F.mp_create_coop = () => attempt(async () => { set_match(await matches.create({ mode: 'coop', game_speed: G.SETTINGS.GAMESPEED ?? 1 })); });
   F.mp_join = () => {
     G.CONTROLLER.text_input_hook = null;
     const code = form.code.trim();
@@ -355,15 +361,17 @@ export function register_lobby_funcs() {
       render(mp.match, true);
     });
   };
-  F.mp_invite_new = (e: any) => {
+  const invite_new = (mode: 'pvp' | 'coop') => (e: any) => {
     const f = e.config.ref_table as FriendView;
     void attempt(async () => {
-      const m = await matches.create({ mode: 'pvp', game_speed: G.SETTINGS.GAMESPEED ?? 1 });
+      const m = await matches.create({ mode, game_speed: G.SETTINGS.GAMESPEED ?? 1 });
       await social_api.invite(f.id);
       friends.invited.add(`${m.id}:${f.id}`);
       set_match(m);
     });
   };
+  F.mp_invite_new = invite_new('pvp');
+  F.mp_invite_new_coop = invite_new('coop');
   F.mp_leave = () => {
     const m = mp.match;
     if (!m) return;

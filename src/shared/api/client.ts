@@ -4,7 +4,7 @@
 import { access_token, go_to_sign_in, refresh_session } from './session';
 import { recorder } from '@/shared/lib/recorder';
 import type {
-  ActionResult, BlindChoice, GameSummaryView, GameView, HandPreview, HistoryView, MatchSettingsView, MatchView, MeView, NewGameRequest,
+  ActionResult, BlindChoice, CoopStepsView, GameSummaryView, GameView, HandPreview, HistoryView, MatchSettingsView, MatchView, MeView, NewGameRequest,
   NewMatchRequest, PlayerAction, ProblemDetails, WatchView,
 } from './types';
 
@@ -147,4 +147,8 @@ export const matches = {
   start: (id: string) => request<MatchView>('POST', `/matches/${id}/start`),
   vote: (id: string, choice: BlindChoice) => request<MatchView>('POST', `/matches/${id}/vote`, { choice }),
   leave: (id: string) => request<void>('POST', `/matches/${id}/leave`),
+  /** coop: the hand cards selected on your turn, for the other player to watch */
+  selection: (id: string, cards: number[]) => request<void>('PUT', `/matches/${id}/selection`, { cards }),
+  /** coop: the run's actions since a version, with their events (the other player's, to play them again) */
+  steps: (id: string, since: number) => request<CoopStepsView>('GET', `/matches/${id}/steps?since=${since}`),
 };

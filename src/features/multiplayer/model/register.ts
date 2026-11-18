@@ -3,6 +3,8 @@
 import { G } from '@/shared/lib/engine';
 import { join_match, open_lobby, open_match_run, register_lobby_funcs } from '../ui/lobby';
 import { start_board } from '../ui/board';
+import { start_coop_board } from '../ui/coop-board';
+import { register_coop_funcs } from './coop';
 import { tr } from '../ui/text';
 import { load_current, mp } from './match';
 import { register_pvp_funcs } from './pvp';
@@ -10,7 +12,9 @@ import { register_pvp_funcs } from './pvp';
 export function register_multiplayer_funcs() {
   register_pvp_funcs(open_match_run);
   register_lobby_funcs();
+  register_coop_funcs();
   start_board();
+  start_coop_board();
   G.FUNCS.multiplayer = () => open_lobby();
   G.FUNCS.multiplayer_join = (code: string) => void join_match(code);
   G.FUNCS.multiplayer_rejoin = () => {

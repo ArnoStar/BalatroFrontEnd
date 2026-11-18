@@ -273,8 +273,30 @@ export class Timeline {
       case 'card_changed': this.changed(e); return true;
       case 'attention_text': this.attention(e); return true;
       case 'card_unlocked': this.unlocked(e); return true;
+      case 'turn': this.turn(e); return true;
     }
     return true;
+  }
+
+  /**
+   * coop: the turn passes, and the other player's hand comes up: the hand on the
+   * table goes, theirs comes in (the cards they kept from their last turn at
+   * once, those they draw with the draw's events)
+   */
+  private turn(e: Ev & { type: 'turn' }) {
+    const drawn = new Set<number>();
+    for (const x of this.events) if (x.t >= e.t && x.type === 'card_moved' && x.to === 'hand') drawn.add(x.card);
+    for (const c of [...G.hand.cards]) {
+      G.hand.remove_card(c);
+      c.remove();
+    }
+    for (const cv of this.view.hand) {
+      if (drawn.has(cv.id)) continue;
+      const c = create_card(cv, G.deck.T.x, G.deck.T.y);
+      G.hand.emplace(c, null, cv.face_down);
+    }
+    G.hand.sort();
+    play_sound('cardSlide1', 0.9, 0.6);
   }
 
   private moved(e: Ev & { type: 'card_moved' }): boolean {
