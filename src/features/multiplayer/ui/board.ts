@@ -135,15 +135,20 @@ function give_up_definition() {
 }
 
 function toggle_definition(m: MatchView) {
+  // (while theirs are shown, the button says it goes back: the jokers on screen aren't yours)
   const label = showing_theirs ? tr('your_jokers') : tr('their_jokers', { name: opponent_name(m) });
   return { n: G.UIT.ROOT, config: { align: 'cm', colour: G.C.CLEAR }, nodes: [
-    UIBox_button({ button: 'pvp_toggle_jokers', label: [label], minw: 2.8, minh: 0.42, scale: 0.3, colour: showing_theirs ? G.C.BLUE : G.C.RED }),
+    UIBox_button({ button: 'pvp_toggle_jokers', label: [label], minw: showing_theirs ? 3.2 : 2.8, minh: 0.42, scale: 0.3, colour: showing_theirs ? G.C.BLUE : G.C.RED }),
   ] };
 }
 
 function show_toggle(m: MatchView) {
   toggle?.remove();
-  toggle = new UIBox({ definition: toggle_definition(m), config: { major: G.jokers, align: 'bm', offset: { x: 0, y: 0.02 }, bond: 'Weak' } });
+  // (the joker area's own box, its frame and "0/5" row, is drawn after the UI and reaches over the button:
+  // it would take its clicks, so it takes none; it is only drawn)
+  const area_box = G.jokers.children?.area_uibox;
+  if (area_box) area_box.states.collide.can = false;
+  toggle = new UIBox({ definition: toggle_definition(m), config: { major: G.jokers, align: 'bm', offset: { x: 0, y: 0.1 }, bond: 'Weak' } });
 }
 
 // ------------------------------------------------------------------ the other player's jokers

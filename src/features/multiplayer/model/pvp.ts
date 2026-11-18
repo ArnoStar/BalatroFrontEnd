@@ -54,12 +54,22 @@ function find_button(name: string): any {
   return null;
 }
 
+/** a one_press button pressable again (UIElement:click disables it) */
+function press_again(e: any, button: string) {
+  if (!e?.config) return;
+  e.config.button = button;
+  e.disable_button = false;
+}
+
 async function choose(choice: BlindChoice, e: any) {
-  // (one_press buttons: pressable again, to change one's mind until the other has chosen)
-  if (e?.config) e.config.button = choice === 'skip' ? 'skip_blind' : 'select_blind';
+  // (pressable again, to change one's mind until the other has chosen)
+  press_again(e, choice === 'skip' ? 'skip_blind' : 'select_blind');
   const m = mp.match;
   if (!m) return;
-  if (m.pvp?.vote?.decision) {
+  const vote = m.pvp?.vote;
+  // a decision not played yet is played now; one already played is the last blind's (the match's view
+  // is behind the run): the choice is for this one (the API knows which)
+  if (vote?.decision && `${m.id}:${vote.index}` !== performed_vote) {
     step(m);
     return;
   }
@@ -75,7 +85,7 @@ async function choose(choice: BlindChoice, e: any) {
 }
 
 async function cash_out(e: any) {
-  if (e?.config) e.config.button = 'cash_out';
+  press_again(e, 'cash_out');
   pvp.cash_out_pending = true;
   const m = await refresh();
   step(m);
