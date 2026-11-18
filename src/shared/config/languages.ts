@@ -58,12 +58,31 @@ export function browser_language(): string {
 const english = { text: null as any };
 const full = new Set<any>(); // fonts whose whole dump is loaded
 
+// (not in the game) the font drawn for the characters a font lacks: the Cyrillic and other letters of
+// players' names in the English pixel font (love Font.fallback)
+const FALLBACK_FONT = 'NotoSans-Bold';
+let fallback: any = null;
+
+function set_fallbacks() {
+  if (!fallback) return;
+  for (const f of G.FONTS) if (f.FONT && f.FONT !== fallback && full.has(f)) f.FONT.fallback = fallback;
+}
+
+async function load_fallback() {
+  const def = G.FONTS.find((f: any) => f.name === FALLBACK_FONT);
+  if (!def) return;
+  await load_full_font(def);
+  fallback = def.FONT;
+  set_fallbacks();
+}
+
 async function load_full_font(font: any) {
   if (full.has(font)) return;
   font.FONT = await loadFont(FONTS_BASE, font.name);
   full.add(font);
   // (G.FONTS[7] is the same font file as G.FONTS[1])
   for (const f of G.FONTS) if (f !== font && f.name === font.name) { f.FONT = font.FONT; full.add(f); }
+  set_fallbacks();
 }
 
 async function load_text(key: string): Promise<any> {
@@ -83,6 +102,7 @@ export async function init_languages() {
   await Promise.all(G.FONTS.filter((f: any) => f.label).map(async (f: any) => {
     if (!full.has(f)) f.FONT = await loadFont(FONTS_BASE, `${f.name}.label`);
   }));
+  void load_fallback().catch((err) => console.warn('[language] no fallback font', err));
   if (!G.LANGUAGES[G.SETTINGS.language]) G.SETTINGS.language = 'en-us';
   try {
     await use_language(G.SETTINGS.language);

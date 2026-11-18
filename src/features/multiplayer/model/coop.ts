@@ -284,6 +284,7 @@ export function register_coop_funcs() {
     const original = G.FUNCS[name];
     G.FUNCS[name] = (e?: any) => {
       if (!in_coop_run() || my_turn() || spectate.next) return original?.(e);
+      if (e?.config) e.disable_button = false; // (refused: pressable again on their turn)
       play_sound('cancel', 0.8, 0.6);
       const name_of = mp.match?.players.find((p) => !p.you)?.name ?? '';
       if (e?.T) attention_text({ text: tr('their_turn', { name: name_of }), scale: 0.5, hold: 1.2 * (G.SETTINGS.GAMESPEED || 1), major: e, align: 'cm', backdrop_colour: G.C.RED });
