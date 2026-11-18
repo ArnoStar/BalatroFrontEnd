@@ -38,11 +38,15 @@ function tally_sprite(pos: { x: number; y: number }, value: any, tooltip: string
   ] };
 }
 
-/** `cards`: another deck than the run's (a PvP opponent's, features/multiplayer) */
+/**
+ * `cards`: another deck than the run's (a PvP opponent's, features/multiplayer).
+ * G.UIDEF.deck_cards (not in the game) may give the player's own deck instead of
+ * the cards on screen (a coop run's table shows whoever's turn it is).
+ */
 export function view_deck(unplayed_only?: boolean, cards?: DeckCard[]) {
   const deck_tables: any[] = [];
   G.VIEWING_DECK = true;
-  const all = cards ?? playing_cards();
+  const all = cards ?? G.UIDEF.deck_cards?.(!!unplayed_only) ?? playing_cards();
   const SUITS: Record<string, DeckCard[]> = { Spades: [], Hearts: [], Clubs: [], Diamonds: [] };
   const suit_map = ['Spades', 'Hearts', 'Clubs', 'Diamonds'];
   for (const v of all) SUITS[v.base.suit]?.push(v);

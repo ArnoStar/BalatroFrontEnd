@@ -10,6 +10,8 @@ export interface Activity {
   ante?: number;
   seeded?: boolean;
   challenge?: string | null;
+  /** a multiplayer run: PvP or coop */
+  mode?: 'pvp' | 'coop' | null;
 }
 
 /** the social service's base URL: VITE_SOCIAL_URL, or /social on this origin */

@@ -1,7 +1,8 @@
 // The game's presence for the player's friends (the social service): what the
 // player is doing, sent when it changes and every minute while the game is
-// seen. A run's deck, stake and ante; the menu; watching a run again. Nothing
-// is sent for a player who isn't signed in, nor while a bug report is replayed.
+// seen. A run's deck, stake and ante (a multiplayer run's mode); the menu;
+// watching a run again. Nothing is sent for a player who isn't signed in, nor
+// while a bug report is replayed.
 import { G } from '@/shared/lib/engine';
 import { social, type Activity } from '@/shared/api';
 import { run } from '@/entities/run';
@@ -14,9 +15,10 @@ function activity(): Activity {
   if (q.has('watch')) return { kind: 'watching' };
   const v = run.view;
   if (G.STAGE === G.STAGES?.RUN && v) {
+    const mode = v.settings.mode;
     return {
       kind: 'run', deck: v.settings.deck, stake: v.settings.stake, ante: v.ante, seeded: !!v.settings.seeded,
-      challenge: v.settings.challenge ?? null,
+      challenge: v.settings.challenge ?? null, mode: mode === 'pvp' || mode === 'coop' ? mode : null,
     };
   }
   return { kind: 'menu' };

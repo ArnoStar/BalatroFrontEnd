@@ -100,6 +100,22 @@ there) loads the run again. After a hand, the hands switch (the timeline's
 decks and the shop's leaving (both must press Next Round); your partner's
 jokers have their name under them, and only their owner sells or moves them.
 
+Around the matches: emotes (a button on the boards and the end screens; the
+bubbles show over the menus too), a ticking sound in the last ten seconds of
+the PvP timer when the other player waits for you, and the tab's title
+blinking (with a sound) when the game is in the background and the match
+needs you (it started, your coop turn, the other player waits, a rematch).
+The end of a match shows how it went (PvP: hit points, damage, biggest hit,
+rounds won; coop, on the game over screen: each player's hands, chips and
+best hand) with a Rematch button (a new lobby with the same settings, which
+the other player joins from their end screen or the title screen) and the
+other player's run to watch. The MULTIPLAYER menu's "Stats & history" has the
+player's PvP and coop numbers, rivals and partners, and their last matches
+with their runs to watch. The host can kick a player from the lobby, and a
+new match starts with the player's last deck, stake and timer. In coop the
+deck view shows your own deck (whoever's turn it is) and a tab with your
+partner's, and the board shows each player's hands and chips.
+
 A signed-in player invites friends from the lobby, or from the menu's friend
 list with a new PvP or Coop match (the social service's invites). The bell at the top right (`features/notifications`) shows what waits
 for them on the social service, live: friend requests to answer, unread

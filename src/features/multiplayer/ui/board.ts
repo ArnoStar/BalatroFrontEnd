@@ -6,8 +6,10 @@
 //   place (and back to the player's);
 // - the full deck screen's tab with the other player's deck;
 // - each blind's cost as the game's big text over the board, and the match's
-//   end as an overlay menu.
-// On the title screen, a match being played shows a button back to it.
+//   end as an overlay menu: how it went, a rematch, the other player's run;
+// - the last seconds of the timer tick when the other player waits for you.
+// On the title screen, a match being played shows a button back to it, and a
+// match just over the other player's rematch.
 import { G, UIBox, DynaText, Event, play_sound } from '@/shared/lib/engine';
 import { localize } from '@/shared/lib/localization';
 import { UIBox_button, attention_text, create_UIBox_generic_options } from '@/shared/ui';
@@ -16,6 +18,7 @@ import { run, create_card, deck_card } from '@/entities/run';
 import { CardArea } from '@/entities/card';
 import { mp, on_match, refresh, seconds_left } from '../model/match';
 import { in_match_run, pvp } from '../model/pvp';
+import { emote_button, close_emotes } from './emotes';
 import { tr } from './text';
 
 /** what the board's texts show (its nodes read them every frame) */
@@ -30,7 +33,10 @@ let showing_theirs = false;
 let opp_sig = '';
 let seen_rounds: Record<string, number> = {};
 let ended_shown = '';
+let end_key = '';
 let menu_box: any = null;
+let menu_key = '';
+let last_tick = -1;
 
 function fmt(x: number | string): string {
   if (typeof x === 'string') return x;
@@ -111,7 +117,9 @@ function board_definition() {
         ] },
       ] },
       { n: G.UIT.R, config: { align: 'cm', padding: 0.02 }, nodes: [
-        UIBox_button({ button: 'pvp_give_up_ask', label: [tr('give_up')], minw: 1.6, minh: 0.36, scale: 0.26, colour: G.C.UI.BACKGROUND_INACTIVE }),
+        emote_button(1.2),
+        { n: G.UIT.C, config: { minw: 0.08 }, nodes: [] },
+        UIBox_button({ button: 'pvp_give_up_ask', label: [tr('give_up')], minw: 1.2, minh: 0.36, scale: 0.26, colour: G.C.UI.BACKGROUND_INACTIVE, col: true }),
       ] },
     ] },
   ] };
@@ -237,6 +245,12 @@ function update_texts(m: MatchView) {
   [ui.status_1 = '', ui.status_2 = '', ui.status_3 = ''] = wrap(s.text, 22);
   const left = seconds_left(m);
   ui.timer = left !== null && m.status === 'playing' ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '';
+  // the other player waits for you: the last seconds tick
+  if (left !== null && left <= 10 && left > 0 && p.opponent_waiting && m.status === 'playing' && left !== last_tick) {
+    last_tick = left;
+    play_sound('other1', 1.2 + (10 - left) * 0.03, 0.45);
+    board?.juice_up?.(0.05, 0.02);
+  }
   [ui.opp_1, ui.opp_2, ui.opp_3, ui.opp_4] = opponent_lines(m);
 }
 
@@ -258,24 +272,97 @@ function show_result(m: MatchView) {
   [ui.status_1 = '', ui.status_2 = '', ui.status_3 = ''] = wrap(line, 22);
 }
 
+/** a row of the end's table: a label, then each player's value */
+function summary_row(label: string, values: string[], colour = G.C.UI.TEXT_LIGHT) {
+  return { n: G.UIT.R, config: { align: 'cm', padding: 0.02 }, nodes: [
+    { n: G.UIT.C, config: { align: 'cl', minw: 2.6 }, nodes: [{ n: G.UIT.T, config: { text: label, scale: 0.32, colour: G.C.UI.TEXT_LIGHT } }] },
+    ...values.map((v) => ({ n: G.UIT.C, config: { align: 'cm', minw: 1.8, r: 0.08, padding: 0.04, colour: G.C.L_BLACK }, nodes: [
+      { n: G.UIT.T, config: { text: v, scale: 0.32, colour, shadow: true } },
+    ] })),
+  ] };
+}
+
+function summary_table(m: MatchView) {
+  const s = m.summary;
+  if (!s) return [];
+  const by = (seat: number) => s.players.find((p) => p.seat === seat);
+  const seats = [m.seat, 1 - m.seat];
+  const vals = (f: (p: any) => string) => seats.map((seat) => { const p = by(seat); return p ? f(p) : '-'; });
+  return [{ n: G.UIT.R, config: { align: 'cm', r: 0.1, padding: 0.1, colour: G.C.BLACK, emboss: 0.05 }, nodes: [{ n: G.UIT.C, config: { align: 'cm' }, nodes: [
+    summary_row('', seats.map((seat) => m.players[seat]?.name ?? '?'), G.C.GOLD),
+    summary_row(tr('hp_left'), vals((p) => String(p.hp ?? 0)), G.C.RED),
+    summary_row(tr('damage_dealt'), vals((p) => String(p.damage_dealt ?? 0))),
+    summary_row(tr('biggest_hit'), vals((p) => String(p.biggest_hit ?? 0))),
+    summary_row(tr('rounds_won'), vals((p) => String(p.rounds_won ?? 0))),
+    summary_row(tr('best_hand'), vals((p) => fmt(p.best_hand ?? 0)), G.C.BLUE),
+  ] }] }];
+}
+
+/** what the end says of a rematch, and its button */
+export function rematch_parts(m: MatchView) {
+  const r = m.rematch;
+  const name = opponent_name(m);
+  const line = !r ? '' : r.by_you ? (r.open ? tr('waiting_rematch', { name }) : '') : r.open ? tr('wants_rematch', { name }) : '';
+  const label = r && !r.by_you && r.open ? tr('join_rematch') : tr('rematch');
+  const button = r?.by_you ? 'nil' : 'mp_rematch';
+  return {
+    line: { n: G.UIT.R, config: { align: 'cm', minh: 0.4 }, nodes: [{ n: G.UIT.T, config: { text: line, scale: 0.4, colour: G.C.GOLD, shadow: true } }] },
+    button: UIBox_button({ button, label: [label], minw: 3, colour: r?.by_you ? G.C.UI.BACKGROUND_INACTIVE : G.C.GREEN, col: true }),
+  };
+}
+
 function end_definition(m: MatchView) {
   const r = m.result!;
   const draw = r.winner === null;
   const title = draw ? tr('draw') : r.you_won ? tr('victory') : tr('defeat');
   const reason = r.reason === 'left' ? 'reason_left' : r.reason === 'game_over' ? 'reason_game_over' : 'reason_hp';
-  const hp = m.pvp ? m.players.map((p) => `${p.name ?? '?'}: ${m.pvp!.hp[p.seat]} ${tr('hp')}`).join('   ') : '';
+  const rematch = rematch_parts(m);
+  const their_run = other_runs[m.id] ?? null;
   return create_UIBox_generic_options({ no_back: true, contents: [
-    { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [
+    { n: G.UIT.R, config: { id: 'mp_end', align: 'cm', padding: 0.1 }, nodes: [
       { n: G.UIT.O, config: { object: new DynaText({ string: [title], colours: [draw ? G.C.WHITE : r.you_won ? G.C.GOLD : G.C.RED], shadow: true, float: true, rotate: true, bump: true, scale: 1.4, pop_in: 0.4 }) } },
     ] },
     { n: G.UIT.R, config: { align: 'cm' }, nodes: [{ n: G.UIT.T, config: { text: tr(reason), scale: 0.45, colour: G.C.UI.TEXT_LIGHT, shadow: true } }] },
-    { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [{ n: G.UIT.T, config: { text: hp, scale: 0.4, colour: G.C.UI.TEXT_INACTIVE, shadow: true } }] },
-    { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [
-      UIBox_button({ button: 'exit_overlay_menu', label: [tr('keep_playing')], minw: 3, colour: G.C.GREY, col: true }),
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: summary_table(m) },
+    rematch.line,
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.08 }, nodes: [
+      rematch.button,
+      { n: G.UIT.C, config: { minw: 0.3 }, nodes: [] },
+      their_run
+        ? UIBox_button({ button: 'mp_watch_run', ref_table: { run: their_run }, label: [tr('watch_their_run', { name: opponent_name(m) })], minw: 3, colour: G.C.RED, col: true })
+        : { n: G.UIT.C, config: {}, nodes: [] },
+      { n: G.UIT.C, config: { minw: 0.3 }, nodes: [] },
+      emote_button(2, 0.5, 0.75),
+    ] },
+    { n: G.UIT.R, config: { align: 'cm', padding: 0.08 }, nodes: [
+      UIBox_button({ button: 'pvp_keep_playing', label: [tr('keep_playing')], minw: 3, colour: G.C.GREY, col: true }),
       { n: G.UIT.C, config: { minw: 0.3 }, nodes: [] },
       UIBox_button({ button: 'pvp_to_menu', label: [tr('main_menu')], minw: 3, colour: G.C.ORANGE, col: true }),
     ] },
   ] });
+}
+
+/** the other player's run in a finished match (theirs to watch: the match's history has it) */
+const other_runs: Record<string, string | null> = {};
+
+function find_other_run(m: MatchView) {
+  if (m.id in other_runs) return;
+  other_runs[m.id] = null;
+  void matches.history(5).then((h) => {
+    const entry = h.matches.find((x) => x.id === m.id);
+    other_runs[m.id] = entry?.runs[1 - entry.seat] ?? null;
+    end_key = '';
+    if (mp.match?.id === m.id) end_changed(mp.match);
+  }, () => {});
+}
+
+/** the rematch (or the other player's run) on the end screen changed: draw it again */
+function end_changed(m: MatchView) {
+  find_other_run(m);
+  const key = `${m.id}:${JSON.stringify(m.rematch ?? null)}:${other_runs[m.id] ?? ''}`;
+  if (key === end_key) return;
+  end_key = key;
+  if (G.OVERLAY_MENU?.get_UIE_by_ID?.('mp_end')) G.FUNCS.overlay_menu({ definition: end_definition(m) });
 }
 
 function show_end(m: MatchView) {
@@ -286,6 +373,7 @@ function show_end(m: MatchView) {
     func: () => {
       if (!in_match_run(mp.match)) return true;
       G.SETTINGS.paused = true;
+      end_key = `${m.id}:${JSON.stringify(m.rematch ?? null)}:${other_runs[m.id] ?? ''}`;
       G.FUNCS.overlay_menu({ definition: end_definition(m) });
       play_sound(m.result?.you_won ? 'win' : 'negative', 1, 0.6);
       return true;
@@ -294,25 +382,29 @@ function show_end(m: MatchView) {
 }
 
 // ------------------------------------------------------------------ the title screen
-function menu_definition() {
+function menu_definition(m: MatchView) {
+  const asked = m.status === 'finished';
   return { n: G.UIT.ROOT, config: { align: 'cm', colour: G.C.CLEAR }, nodes: [
     { n: G.UIT.R, config: { align: 'cm', r: 0.1, padding: 0.12, colour: G.C.L_BLACK, emboss: 0.05 }, nodes: [
       { n: G.UIT.C, config: { align: 'cm', padding: 0.05 }, nodes: [
-        { n: G.UIT.T, config: { text: tr('in_progress'), scale: 0.4, colour: G.C.UI.TEXT_LIGHT, shadow: true } },
+        { n: G.UIT.T, config: { text: asked ? tr('wants_rematch', { name: opponent_name(m) }) : tr('in_progress'), scale: 0.4, colour: asked ? G.C.GOLD : G.C.UI.TEXT_LIGHT, shadow: true } },
       ] },
-      UIBox_button({ button: 'multiplayer_rejoin', label: [tr('rejoin')], minw: 3, minh: 0.6, scale: 0.4, colour: G.C.RED, col: true }),
+      asked
+        ? UIBox_button({ button: 'mp_rematch', label: [tr('join_rematch')], minw: 3, minh: 0.6, scale: 0.4, colour: G.C.GREEN, col: true })
+        : UIBox_button({ button: 'multiplayer_rejoin', label: [tr('rejoin')], minw: 3, minh: 0.6, scale: 0.4, colour: G.C.RED, col: true }),
     ] },
   ] };
 }
 
 function render_menu(m: MatchView | null) {
-  const on_menu = G.STAGE === G.STAGES.MAIN_MENU && !!G.MAIN_MENU_UI && !G.screenwipe && !!m && m.status === 'playing' && !!m.run_id;
-  if (!on_menu) {
-    if (menu_box) { menu_box.remove(); menu_box = null; }
-    return;
-  }
-  if (menu_box && !menu_box.REMOVED) return;
-  menu_box = new UIBox({ definition: menu_definition(), config: { align: 'tmi', offset: { x: 0, y: 0.3 }, major: G.ROOM_ATTACH, bond: 'Weak' } });
+  const on_menu = G.STAGE === G.STAGES.MAIN_MENU && !!G.MAIN_MENU_UI && !G.screenwipe && !G.OVERLAY_MENU && !!m;
+  const playing = on_menu && m!.status === 'playing' && !!m!.run_id;
+  const asked = on_menu && m!.status === 'finished' && !!m!.rematch?.open && !m!.rematch.by_you;
+  const key = playing ? `play:${m!.id}` : asked ? `rematch:${m!.id}` : '';
+  if (key !== menu_key && menu_box) { menu_box.remove(); menu_box = null; }
+  menu_key = key;
+  if (!key || (menu_box && !menu_box.REMOVED)) return;
+  menu_box = new UIBox({ definition: menu_definition(m!), config: { align: 'tmi', offset: { x: 0, y: 0.3 }, major: G.ROOM_ATTACH, bond: 'Weak' } });
 }
 
 // ------------------------------------------------------------------ the whole
@@ -340,7 +432,10 @@ function render(m: MatchView | null = mp.match) {
   if (showing_theirs && run.busy) set_view(false);
   else if (showing_theirs && m.pvp.opponent) show_theirs(m.pvp.opponent);
   show_result(m);
-  if (m.status === 'finished') show_end(m);
+  if (m.status === 'finished') {
+    show_end(m);
+    end_changed(m);
+  }
 }
 
 /** the other player's whole deck, for the full deck screen's tab */
@@ -359,8 +454,13 @@ export function start_board() {
   }, 500);
   G.FUNCS.pvp_toggle_jokers = () => set_view(!showing_theirs);
   G.FUNCS.pvp_to_menu = () => {
+    close_emotes();
     G.FUNCS.exit_overlay_menu();
     G.FUNCS.go_to_menu();
+  };
+  G.FUNCS.pvp_keep_playing = () => {
+    close_emotes();
+    G.FUNCS.exit_overlay_menu();
   };
   G.FUNCS.pvp_give_up_ask = () => {
     G.SETTINGS.paused = true;

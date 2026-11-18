@@ -14,6 +14,30 @@ const RULES = { hp: 50, ante: 4, loss: 10 };
 
 /** what the menu's inputs and texts hold */
 const form = { code: '', seed: '', status: '' };
+const SETTINGS_KEY = 'balatro-fe.match_settings';
+
+/** the deck, stake and timer the player last chose for a match (a new one starts with them) */
+function last_settings(): { deck?: string; stake?: number; timer?: number } {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') ?? {}; } catch { return {}; }
+}
+
+function keep_settings(s: { deck: string; stake: number; timer: number }) {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ deck: s.deck, stake: s.stake, timer: s.timer })); } catch { /* (private mode) */ }
+}
+
+/** a new match of this mode, with the player's last settings (and their game speed) */
+function new_match(mode: 'pvp' | 'coop') {
+  return matches.create({ mode, game_speed: G.SETTINGS.GAMESPEED ?? 1, ...last_settings() })
+    .catch(() => matches.create({ mode, game_speed: G.SETTINGS.GAMESPEED ?? 1 })); // (settings no longer offered)
+}
+
+/** resolves once the title screen is up (after a run's screen wipe) */
+export function when_menu_ready(): Promise<void> {
+  return new Promise((resolve) => {
+    const check = () => (G.STAGE === G.STAGES.MAIN_MENU && !G.screenwipe && G.MAIN_MENU_UI ? resolve() : requestAnimationFrame(check));
+    check();
+  });
+}
 let open = false;
 let shown = '';
 let off: (() => void) | null = null;
@@ -120,6 +144,8 @@ function menu_contents() {
         text_field({ w: 3.2, max_length: 8, all_caps: true, prompt_text: tr('code_placeholder'), ref_table: form, ref_value: 'code', keyboard_offset: 1 }),
       ] },
       UIBox_button({ button: 'mp_join', label: [tr('join')], minw: 2, minh: 0.7, scale: 0.4, colour: G.C.BLUE, col: true }),
+      { n: G.UIT.C, config: { minw: 0.6 }, nodes: [] },
+      UIBox_button({ button: 'mp_stats', label: [tr('stats_history')], minw: 3.4, minh: 0.7, scale: 0.4, colour: G.C.GREEN, col: true }),
     ] },
     status_row(),
   ];
@@ -140,12 +166,16 @@ function playing_contents(m: MatchView) {
   ];
 }
 
-function player_row(name: string, tags: { text: string; colour: any }[]) {
+/** a player in the lobby; `kick`: their seat, for the host's Kick button */
+function player_row(name: string, tags: { text: string; colour: any }[], kick: number | null = null) {
   return { n: G.UIT.R, config: { align: 'cl', r: 0.1, padding: 0.08, colour: G.C.L_BLACK, minw: 5.4, emboss: 0.05 }, nodes: [
     { n: G.UIT.C, config: { align: 'cl', minw: 3, maxw: 3 }, nodes: [{ n: G.UIT.T, config: { text: name, scale: 0.38, colour: G.C.UI.TEXT_LIGHT, shadow: true } }] },
     ...tags.map((t) => ({ n: G.UIT.C, config: { align: 'cm', r: 0.08, padding: 0.05, colour: t.colour }, nodes: [
       { n: G.UIT.T, config: { text: t.text, scale: 0.28, colour: G.C.UI.TEXT_LIGHT } },
     ] })),
+    ...(kick === null ? [] : [
+      UIBox_button({ button: 'mp_kick', ref_table: { seat: kick }, label: [tr('kick')], minw: 1.2, minh: 0.36, scale: 0.26, colour: G.C.RED, col: true }),
+    ]),
   ] };
 }
 
@@ -238,7 +268,7 @@ function lobby_contents(m: MatchView) {
   const players: any[] = m.players.map((p) => player_row(p.name ?? '?', [
     ...(p.you ? [{ text: tr('you'), colour: G.C.BLUE }] : []),
     ...(p.host ? [{ text: tr('host'), colour: G.C.GOLD }] : []),
-  ]));
+  ], m.host && !p.you ? p.seat : null));
   if (m.players.length < 2) players.push({ n: G.UIT.R, config: { align: 'cm', padding: 0.08 }, nodes: [{ n: G.UIT.T, config: { text: tr('waiting_player'), scale: 0.33, colour: G.C.UI.TEXT_INACTIVE } }] });
   const left = { n: G.UIT.C, config: { align: 'tm', padding: 0.1, r: 0.1, colour: G.C.BLACK, emboss: 0.05, minw: 6 }, nodes: [
     { n: G.UIT.R, config: { align: 'cm', padding: 0.05 }, nodes: [{ n: G.UIT.T, config: { text: tr('invite_code'), scale: 0.33, colour: G.C.UI.TEXT_LIGHT } }] },
@@ -325,8 +355,27 @@ export async function join_match(code: string) {
 export function register_lobby_funcs() {
   const F = G.FUNCS;
   F.mp_close = () => close_lobby();
-  F.mp_create_pvp = () => attempt(async () => { set_match(await matches.create({ mode: 'pvp', game_speed: G.SETTINGS.GAMESPEED ?? 1 })); });
-  F.mp_create_coop = () => attempt(async () => { set_match(await matches.create({ mode: 'coop', game_speed: G.SETTINGS.GAMESPEED ?? 1 })); });
+  F.mp_create_pvp = () => attempt(async () => { set_match(await new_match('pvp')); });
+  F.mp_create_coop = () => attempt(async () => { set_match(await new_match('coop')); });
+  F.mp_kick = (e: any) => {
+    const m = mp.match;
+    const seat = e?.config?.ref_table?.seat;
+    if (!m || typeof seat !== 'number') return;
+    void attempt(async () => { set_match(await matches.kick(m.id, seat)); });
+  };
+  /** after a match: a new lobby with its settings (or the other player's, joined), on the title screen */
+  F.mp_rematch = async () => {
+    // (a coop run's game over can come before the match's view says it is over)
+    const old = mp.match?.status === 'finished' ? mp.match : await refresh();
+    if (!old || old.status !== 'finished') return;
+    void matches.rematch(old.id).then((next) => {
+      const show = () => { set_match(next); open_lobby(); };
+      if (G.STAGE === G.STAGES.MAIN_MENU) return show();
+      if (G.OVERLAY_MENU) G.FUNCS.exit_overlay_menu();
+      G.FUNCS.go_to_menu();
+      void when_menu_ready().then(show);
+    }, (err) => console.warn('[multiplayer] no rematch', err));
+  };
   F.mp_join = () => {
     G.CONTROLLER.text_input_hook = null;
     const code = form.code.trim();
@@ -336,7 +385,11 @@ export function register_lobby_funcs() {
   const change = (patch: Record<string, unknown>) => {
     const m = mp.match;
     if (!m) return;
-    void attempt(async () => { set_match(await matches.settings(m.id, { ...m.settings, ...patch } as typeof m.settings)); });
+    void attempt(async () => {
+      const changed = await matches.settings(m.id, { ...m.settings, ...patch } as typeof m.settings);
+      keep_settings(changed.settings);
+      set_match(changed);
+    });
   };
   F.mp_set_deck = (args: any) => change({ deck: decks()[args.to_key - 1]?.key });
   F.mp_set_stake = (args: any) => change({ stake: stakes()[args.to_key - 1]?.level });
@@ -364,7 +417,7 @@ export function register_lobby_funcs() {
   const invite_new = (mode: 'pvp' | 'coop') => (e: any) => {
     const f = e.config.ref_table as FriendView;
     void attempt(async () => {
-      const m = await matches.create({ mode, game_speed: G.SETTINGS.GAMESPEED ?? 1 });
+      const m = await new_match(mode);
       await social_api.invite(f.id);
       friends.invited.add(`${m.id}:${f.id}`);
       set_match(m);

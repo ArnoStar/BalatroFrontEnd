@@ -1,9 +1,12 @@
 // The multiplayer feature's entry points: the MULTIPLAYER button, the PvP run's
 // buttons and panel, and /play/?match=<code> (an invite link).
 import { G } from '@/shared/lib/engine';
-import { join_match, open_lobby, open_match_run, register_lobby_funcs } from '../ui/lobby';
+import { join_match, open_lobby, open_match_run, register_lobby_funcs, when_menu_ready } from '../ui/lobby';
 import { start_board } from '../ui/board';
 import { start_coop_board } from '../ui/coop-board';
+import { register_emote_funcs } from '../ui/emotes';
+import { register_stats_funcs } from '../ui/stats';
+import { start_alerts } from './alerts';
 import { register_coop_funcs } from './coop';
 import { tr } from '../ui/text';
 import { load_current, mp } from './match';
@@ -13,8 +16,11 @@ export function register_multiplayer_funcs() {
   register_pvp_funcs(open_match_run);
   register_lobby_funcs();
   register_coop_funcs();
+  register_emote_funcs();
+  register_stats_funcs();
   start_board();
   start_coop_board();
+  start_alerts();
   G.FUNCS.multiplayer = () => open_lobby();
   G.FUNCS.multiplayer_join = (code: string) => void join_match(code);
   G.FUNCS.multiplayer_rejoin = () => {
@@ -28,13 +34,6 @@ export function register_multiplayer_funcs() {
 /** the round evaluation's line for a lost round of a PvP run (in place of Mr. Bones') */
 export function round_lost_text(): string {
   return tr('round_lost_row');
-}
-
-function when_menu_ready(): Promise<void> {
-  return new Promise((resolve) => {
-    const check = () => (G.STAGE === G.STAGES.MAIN_MENU && !G.screenwipe && G.MAIN_MENU_UI ? resolve() : requestAnimationFrame(check));
-    check();
-  });
 }
 
 /** /play/?match=<code>: a friend's invite, joined once the title screen is up */
