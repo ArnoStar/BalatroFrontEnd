@@ -38,10 +38,11 @@ function tally_sprite(pos: { x: number; y: number }, value: any, tooltip: string
   ] };
 }
 
-export function view_deck(unplayed_only?: boolean) {
+/** `cards`: another deck than the run's (a PvP opponent's, features/multiplayer) */
+export function view_deck(unplayed_only?: boolean, cards?: DeckCard[]) {
   const deck_tables: any[] = [];
   G.VIEWING_DECK = true;
-  const all = playing_cards();
+  const all = cards ?? playing_cards();
   const SUITS: Record<string, DeckCard[]> = { Spades: [], Hearts: [], Clubs: [], Diamonds: [] };
   const suit_map = ['Spades', 'Hearts', 'Clubs', 'Diamonds'];
   for (const v of all) SUITS[v.base.suit]?.push(v);
@@ -420,6 +421,8 @@ export function deck_info(_show_remaining?: boolean) {
       { label: localize('b_full_deck'), tab_definition_function: view_deck },
     ]
     : [{ label: localize('b_full_deck'), chosen: true, tab_definition_function: view_deck }];
+  // (not in the game: a PvP opponent's deck, features/multiplayer)
+  tabs.push(...(G.UIDEF.extra_deck_tabs?.() ?? []));
   return create_UIBox_generic_options({ contents: [create_tabs({ tabs, tab_h: 8, snap_to_nav: true })] });
 }
 

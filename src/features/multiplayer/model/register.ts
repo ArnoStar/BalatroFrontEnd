@@ -1,15 +1,16 @@
 // The multiplayer feature's entry points: the MULTIPLAYER button, the PvP run's
 // buttons and panel, and /play/?match=<code> (an invite link).
 import { G } from '@/shared/lib/engine';
-import { join_match, open_lobby, open_match_run } from '../ui/lobby';
-import { start_pvp_hud } from '../ui/pvp-hud';
+import { join_match, open_lobby, open_match_run, register_lobby_funcs } from '../ui/lobby';
+import { start_board } from '../ui/board';
 import { tr } from '../ui/text';
 import { load_current, mp } from './match';
 import { register_pvp_funcs } from './pvp';
 
 export function register_multiplayer_funcs() {
   register_pvp_funcs(open_match_run);
-  start_pvp_hud();
+  register_lobby_funcs();
+  start_board();
   G.FUNCS.multiplayer = () => open_lobby();
   G.FUNCS.multiplayer_join = (code: string) => void join_match(code);
   G.FUNCS.multiplayer_rejoin = () => {

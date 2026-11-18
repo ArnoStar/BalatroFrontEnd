@@ -182,6 +182,8 @@ export interface OpponentView {
   version: number; phase: Phase; state: string; ante: number; round: number; dollars: number; hands_left: number;
   discards_left: number; hand_size: number; joker_slots: number; round_score: number | string; blind: BlindView | null;
   jokers: CardView[]; consumables: number; deck_size: number; vouchers: string[]; poker_hands: PokerHandView[]; won: boolean;
+  /** their whole deck, by suit and rank (not its order) */
+  full_deck?: DeckCardView[]; deck_remaining?: number;
 }
 export interface PvPBlindResult {
   index: number; ante: number; slot: Slot | null; chips: (number | string)[]; target: (number | string)[];
