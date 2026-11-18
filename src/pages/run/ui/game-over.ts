@@ -122,6 +122,8 @@ export function create_UIBox_game_over() {
             ] },
           ] },
         ] },
+        // (not in the game: a multiplayer match's end, features/multiplayer)
+        ...(G.UIDEF.game_over_extra?.() ?? []),
         { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [
           { n: G.UIT.R, config: { id: 'from_game_over', align: 'cm', minw: 5, padding: 0.1, r: 0.1, hover: true, colour: G.C.RED, button: 'notify_then_setup_run', shadow: true, focus_args: { nav: 'wide', snap_to: true } }, nodes: [
             { n: G.UIT.R, config: { align: 'cm', padding: 0, no_fill: true, maxw: 4.8 }, nodes: [

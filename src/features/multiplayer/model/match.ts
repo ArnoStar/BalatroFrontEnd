@@ -19,9 +19,11 @@ let timer: ReturnType<typeof setInterval> | null = null;
 let in_flight = false;
 
 export function set_match(m: MatchView | null) {
+  const before = mp.match;
   mp.match = m;
   mp.received_at = Date.now();
   if (m && m.status !== 'finished') start_polling();
+  else if (m && before?.id === m.id && before.status !== 'finished') follow_finished();
   for (const l of [...listeners]) {
     try { l(m); } catch (err) { console.error('[multiplayer]', err); }
   }
@@ -46,11 +48,20 @@ export async function refresh(): Promise<MatchView | null> {
   } finally {
     in_flight = false;
   }
-  if (mp.match?.status === 'finished') stop_polling();
+  if (mp.match?.status === 'finished' && Date.now() > follow_until) stop_polling();
   return mp.match;
 }
 
 let poll_ms = POLL_MS;
+let follow_until = 0;
+
+const FOLLOW_MS = 3 * 60_000;
+
+/** a match just over is still read for a while (a rematch the other player asks for) */
+export function follow_finished(ms = FOLLOW_MS) {
+  follow_until = Date.now() + ms;
+  if (!timer && mp.match) timer = setInterval(() => { void refresh(); }, poll_ms);
+}
 
 export function start_polling() {
   if (timer) return;

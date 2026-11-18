@@ -4,7 +4,7 @@
 import { access_token, go_to_sign_in, refresh_session } from './session';
 import { recorder } from '@/shared/lib/recorder';
 import type {
-  ActionResult, BlindChoice, CoopStepsView, GameSummaryView, GameView, HandPreview, HistoryView, MatchSettingsView, MatchView, MeView, NewGameRequest,
+  ActionResult, BlindChoice, CoopDecksView, CoopStepsView, EmoteName, GameSummaryView, MatchHistoryView, MultiplayerStats, GameView, HandPreview, HistoryView, MatchSettingsView, MatchView, MeView, NewGameRequest,
   NewMatchRequest, PlayerAction, ProblemDetails, WatchView,
 } from './types';
 
@@ -151,4 +151,15 @@ export const matches = {
   selection: (id: string, cards: number[]) => request<void>('PUT', `/matches/${id}/selection`, { cards }),
   /** coop: the run's actions since a version, with their events (the other player's, to play them again) */
   steps: (id: string, since: number) => request<CoopStepsView>('GET', `/matches/${id}/steps?since=${since}`),
+  /** after a match: a new lobby with the same settings (or the other player's, joined) */
+  rematch: (id: string) => request<MatchView>('POST', `/matches/${id}/rematch`),
+  /** the host sends a player away from the lobby */
+  kick: (id: string, seat: number) => request<MatchView>('POST', `/matches/${id}/kick`, { seat }),
+  emote: (id: string, emote: EmoteName) => request<void>('POST', `/matches/${id}/emote`, { emote }),
+  /** the player's finished matches, the latest first */
+  history: (limit = 20, before?: string | null) =>
+    request<MatchHistoryView>('GET', `/matches/history?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ''}`),
+  stats: () => request<MultiplayerStats>('GET', '/matches/stats'),
+  /** a coop run's two decks (each player's cards, and those still to draw) */
+  coop_decks: (run_id: string) => request<CoopDecksView>('GET', `/games/${run_id}/coop/decks`),
 };

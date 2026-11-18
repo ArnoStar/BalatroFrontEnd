@@ -31,9 +31,16 @@ export function in_coop_run(m: MatchView | null = mp.match): m is MatchView {
   return !!m && m.mode === 'coop' && !!m.run_id && run.id === m.run_id && G.STAGE === G.STAGES.RUN;
 }
 
-/** it is this player's turn (from the run's view: the latest the screen shows) */
+/** this player's seat in the coop run on screen (the match's: a replayed step's view is the other player's) */
+export function my_seat(): number | null {
+  const m = mp.match;
+  return in_coop_run(m) && run.view?.coop ? m.seat : null;
+}
+
+/** it is this player's turn (the turn of the run's view: the latest the screen shows) */
 export function my_turn(): boolean {
-  return !!run.view?.coop?.your_turn;
+  const seat = my_seat();
+  return seat !== null && run.view?.coop?.turn === seat;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -82,6 +89,21 @@ async function idle(ms = 60_000): Promise<boolean> {
   return false;
 }
 
+const SCREEN_WAIT_MS = 8000;
+
+/** what `f` finds once the screen has it (the game may still be drawing cards, sliding the shop in...) */
+async function on_screen<T>(f: () => T | null | undefined | false): Promise<T | null> {
+  const t0 = Date.now();
+  while (Date.now() - t0 < SCREEN_WAIT_MS) {
+    if (!run.busy && !timeline_playing() && !G.screenwipe) {
+      const found = f();
+      if (found) return found;
+    }
+    await sleep(100);
+  }
+  return null;
+}
+
 /** one of the other player's actions, played here with its animations; false: it couldn't be */
 async function play_step(step: CoopStep): Promise<boolean> {
   const a = step.action;
@@ -92,27 +114,32 @@ async function play_step(step: CoopStep): Promise<boolean> {
   };
   switch (a.type) {
     case 'select_blind': case 'skip_blind': case 'cash_out': {
-      const b = find_button(a.type);
+      const b = await on_screen(() => find_button(a.type));
       if (!b) return false;
       go(() => G.FUNCS[a.type](b));
       break;
     }
     case 'reroll_boss': go(() => G.FUNCS.reroll_boss(find_button('reroll_boss') ?? {})); break;
     case 'play': case 'discard': {
-      if (G.STATE !== G.STATES.SELECTING_HAND || !select(a.cards ?? [])) return false;
+      const ready = await on_screen(() => G.STATE === G.STATES.SELECTING_HAND && (a.cards ?? []).every((id: number) => card_in([G.hand], id)));
+      if (!ready || !select(a.cards ?? [])) return false;
       const fn = a.type === 'play' ? 'play_cards_from_highlighted' : 'discard_cards_from_highlighted';
       go(() => G.FUNCS[fn]());
       break;
     }
     case 'sort': go(() => G.FUNCS[a.mode === 'suit' ? 'sort_hand_suit' : 'sort_hand_value']()); break;
     case 'buy': {
-      const card = card_in([G.shop_jokers, G.shop_vouchers, G.shop_booster], a.card);
+      const card = await on_screen(() => card_in([G.shop_jokers, G.shop_vouchers, G.shop_booster], a.card));
       if (!card) return false;
       if (card.area === G.shop_jokers) go(() => G.FUNCS.buy_from_shop({ config: { ref_table: card, id: a.use ? 'buy_and_use' : undefined } }));
       else go(() => G.FUNCS.use_card({ config: { ref_table: card } }));
       break;
     }
-    case 'reroll': go(() => G.FUNCS.reroll_shop()); break;
+    case 'reroll': {
+      if (!await on_screen(() => !!G.shop)) return false;
+      go(() => G.FUNCS.reroll_shop());
+      break;
+    }
     case 'end_shop': {
       if (step.game.phase === 'shop') {
         // (only their vote: the shop stays)
@@ -120,25 +147,30 @@ async function play_step(step: CoopStep): Promise<boolean> {
         finish_action(step.game);
         return true;
       }
+      if (!await on_screen(() => !!G.shop)) return false;
       go(() => original_toggle_shop?.());
       break;
     }
     case 'use': case 'pick': {
-      const card = card_in(a.type === 'use' ? [G.consumeables] : [G.pack_cards], a.card);
+      const card = await on_screen(() => card_in(a.type === 'use' ? [G.consumeables] : [G.pack_cards], a.card));
       if (!card || !select(a.targets ?? [])) return false;
       go(() => G.FUNCS.use_card({ config: { ref_table: card } }));
       break;
     }
     case 'sell': {
-      const card = card_in([G.jokers, G.consumeables], a.card);
+      const card = await on_screen(() => card_in([G.jokers, G.consumeables], a.card));
       if (!card) return false;
       go(() => G.FUNCS.sell_card({ config: { ref_table: card } }));
       break;
     }
-    case 'skip_pack': go(() => G.FUNCS.skip_booster()); break;
+    case 'skip_pack': {
+      if (!await on_screen(() => !!G.pack_cards?.cards?.length)) return false;
+      go(() => G.FUNCS.skip_booster());
+      break;
+    }
     case 'move': {
       // their jokers (or the hand, the consumables) rearranged: the card to its new place
-      const card = card_in([G.jokers, G.hand, G.consumeables], a.card);
+      const card = await on_screen(() => card_in([G.jokers, G.hand, G.consumeables], a.card));
       if (!card) return false;
       const area = card.area;
       area.cards.splice(area.cards.indexOf(card), 1);
@@ -168,21 +200,24 @@ async function catch_up(m: MatchView) {
   coop.replaying = true;
   try {
     const st = await matches.steps(m.id, v.version);
-    let ok = st.complete;
+    let why = st.complete ? '' : 'the steps are no longer kept';
     for (const step of st.steps) {
-      if (!ok) break;
+      if (why) break;
       if (step.version < (run.view?.version ?? 0)) continue; // (already on screen: this player's own)
-      ok = await play_step(step);
+      if (!await play_step(step)) why = `${step.action.type} at version ${step.version} couldn't be played here`;
     }
-    if (ok && run.id) {
+    if (!why && run.id) {
       // this player's own view again (the legal actions are theirs)
       const mine = await api.getGame(run.id);
       if (mine.phase === run.view?.phase && mine.state === run.view?.state) {
         set_view(mine);
         finish_action(mine);
-      } else ok = false;
+      } else why = `the screen is at ${run.view?.state}, the run at ${mine.state}`;
     }
-    if (!ok) reload();
+    if (why) {
+      console.warn(`[coop] loading the run again: ${why}`);
+      reload();
+    }
   } catch (err) {
     console.warn('[coop] the other player\'s actions could not be played here', err);
     reload();
@@ -198,7 +233,7 @@ function lock_hand() {
     c.states.click.can = mine;
     c.states.drag.can = mine;
   }
-  const seat = run.view?.coop?.seat;
+  const seat = my_seat();
   for (const c of G.jokers?.cards ?? []) {
     const owner = run.view?.jokers.find((j) => j.id === c.api_id)?.owner;
     if (owner !== undefined && owner !== null) c.states.drag.can = owner === seat;
@@ -222,12 +257,17 @@ function selections(m: MatchView) {
 }
 
 function step_match(m: MatchView | null) {
-  if (!in_coop_run(m) || m.status !== 'playing') {
+  if (!in_coop_run(m)) {
+    set_poll_interval(IDLE_POLL_MS);
+    return;
+  }
+  // (a match just over still has the actions that ended it to play here: the run's last hand)
+  void catch_up(m);
+  if (m.status !== 'playing') {
     set_poll_interval(IDLE_POLL_MS);
     return;
   }
   set_poll_interval(m.coop?.your_turn ? IDLE_POLL_MS : WATCH_POLL_MS);
-  void catch_up(m);
   selections(m);
 }
 
@@ -253,8 +293,9 @@ export function register_coop_funcs() {
   original_toggle_shop = G.FUNCS.toggle_shop;
   G.FUNCS.toggle_shop = (e?: any) => {
     const c = run.view?.coop;
-    if (!in_coop_run() || !c || c.seat === null) return original_toggle_shop?.(e);
-    const other = 1 - c.seat;
+    const seat = my_seat();
+    if (!c || seat === null) return original_toggle_shop?.(e);
+    const other = 1 - seat;
     if (c.shop_votes.includes(other)) return original_toggle_shop?.(e);
     if (e?.config) e.config.button = null;
     void perform({ type: 'end_shop' }, { refused: () => { if (e?.config) e.config.button = 'toggle_shop'; } });

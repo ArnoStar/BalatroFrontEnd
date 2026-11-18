@@ -209,11 +209,46 @@ export interface MatchView {
   settings: MatchSettingsView; players: MatchPlayerView[]; run_id: string | null; run_version: number | null;
   pvp: PvPView | null; result: MatchResultView | null; server_time: string;
   coop?: CoopMatchView | null;
+  summary?: MatchSummaryView | null;
+  rematch?: RematchView | null;
+  emotes?: EmoteView[];
 }
+
+export type Score = number | string;
+export type EmoteName = 'gg' | 'nice' | 'wow' | 'oops' | 'hurry' | 'thanks' | 'good_luck' | 'well_played';
+export interface EmoteView { seq: number; seat: number; emote: EmoteName; at: string }
+export interface RematchView { match_id: string; code: string; by_you: boolean; open: boolean }
+export interface MatchSummaryPlayer {
+  seat: number; name: string | null; best_hand: Score;
+  hp?: number | null; damage_dealt?: number | null; damage_taken?: number | null; biggest_hit?: number | null;
+  rounds_won?: number | null; rounds_lost?: number | null;
+  hands?: number | null; chips?: Score | null; best_hand_name?: string | null; discards?: number | null;
+}
+export interface MatchSummaryView { ante: number; rounds: number; run_won: boolean | null; players: MatchSummaryPlayer[] }
+export interface MatchHistoryEntry {
+  id: string; mode: MatchMode; settings: MatchSettingsView; seed: string | null; created_at: string; finished_at: string | null;
+  seat: number; players: MatchPlayerView[]; result: MatchResultView; summary: MatchSummaryView | null; runs: (string | null)[];
+}
+export interface MatchHistoryView { matches: MatchHistoryEntry[]; next_before: string | null }
+export interface PvPStats {
+  played: number; won: number; lost: number; drawn: number; gave_up: number; opponent_left: number; streak: number;
+  best_streak: number; damage_dealt: number; damage_taken: number; biggest_hit: number; best_ante: number;
+}
+export interface CoopStats {
+  played: number; runs_won: number; best_ante: number; best_round: number; hands: number; chips: Score;
+  best_hand: Score; best_hand_name: string | null;
+}
+export interface MatchOpponentStats { name: string | null; played: number; won: number; lost: number; best_ante: number }
+export interface MultiplayerStats { pvp: PvPStats; coop: CoopStats; rivals: MatchOpponentStats[]; partners: MatchOpponentStats[] }
+export interface CoopDeckView { seat: number; full_deck: DeckCardView[]; remaining: DeckCardView[] }
+export interface CoopDecksView { seats: CoopDeckView[] }
 
 export interface CoopView {
   seat: number | null; turn: number; your_turn: boolean; joker_slots: number[]; shop_votes: number[];
-  pack_seat: number | null; seats: { deck: number; hand: number }[];
+  pack_seat: number | null; seats: CoopSeatView[];
+}
+export interface CoopSeatView {
+  deck: number; hand: number; hands?: number; chips?: Score; best_hand?: Score; best_hand_name?: string | null; discards?: number;
 }
 export interface CoopMatchView { turn: number; your_turn: boolean; selection: number[]; selection_seq: number; over: boolean }
 export interface CoopStep { version: number; seat: number; action: Record<string, any>; events: GameEvent[]; game: GameView }
