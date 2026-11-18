@@ -1,10 +1,11 @@
 // Items drawn as the game draws its cards: a joker, a tarot, planet or spectral
 // card, or a playing card with its enhancement and seal, each with the item's
-// edition (the game's own shaders) and the stake sticker of the win it came
-// from. They are only looked at (no tooltip: an item does nothing). And the
+// edition (the game's own shaders), the stake sticker of the win it came from,
+// and its wear (the `wear` shader, from its condition: faded colours, grime,
+// scratches, frayed edges, a crease). They are only looked at (no tooltip: an item does nothing). And the
 // coins the player's runs earned, told on the title screen in the game's own
 // overlay.
-import { G, DynaText, Event, play_sound } from '@/shared/lib/engine';
+import { G, DynaText, Event, Sprite, play_sound } from '@/shared/lib/engine';
 import { create_UIBox_generic_options, UIBox_button } from '@/shared/ui';
 import { Card } from '@/entities/card';
 import { portal_base, type EarnedCoins, type PlayerItem } from '@/shared/api';
@@ -23,8 +24,34 @@ export function item_card(item: PlayerItem, x: number, y: number, w: number, h: 
   const flag = EDITION_FLAG[item.edition];
   if (flag) card.set_edition({ [flag]: true }, true, true);
   if (item.stake && item.kind === 'joker') card.sticker = G.sticker_map[item.stake - 1];
+  if (typeof item.condition === 'number' && item.condition < 0.995) add_wear(card, item);
   card.no_ui = true;
   return card;
+}
+
+/** a number from 0 to 1000 for an item: its wear's own pattern */
+function seed_of(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 100000) / 100;
+}
+
+/** the item's wear over its card: the card's own sprite drawn again through the `wear` shader, after everything else
+ *  (Card:draw draws the children it doesn't know last) */
+function add_wear(card: any, item: PlayerItem) {
+  const center = card.children.center;
+  if (!center || !G.SHADERS.wear) return;
+  const wear: any = new Sprite(0, 0, card.T.w, card.T.h, center.atlas, center.sprite_pos);
+  wear.states.drag.can = false;
+  wear.states.collide.can = false;
+  wear.states.hover.can = false;
+  wear.role.draw_major = card;
+  const send = [1 - (item.condition ?? 1), seed_of(item.id)];
+  wear.draw = () => {
+    if (card.sprite_facing !== 'front' || !card.states.visible) return;
+    wear.draw_shader('wear', null, send, null, card.children.center);
+  };
+  card.children.item_wear = wear;
 }
 
 // the coins' texts (the game's localization has none): English, and Russian when the game is in Russian

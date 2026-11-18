@@ -18,6 +18,8 @@ export interface PlayerItem {
   /** a playing card's enhancement (m_glass ...) and seal (Gold, Red, Blue, Purple) */
   enhancement?: string | null;
   seal?: string | null;
+  /** how well kept its card is: 0 (ruined) ... 1 (pristine) */
+  condition?: number;
   rarity: 1 | 2 | 3 | 4;
   /** the stake of the win it came from (1 White ... 8 Gold): the game's stake sticker */
   stake: number | null;
