@@ -13,39 +13,31 @@ import { Back } from '@/entities/back';
 import { init_game_object } from '@/entities/run';
 import { fetch_saved_game } from '@/widgets/run-setup';
 import { cached_showcase, look_for_items } from '../model/items';
-import { item_card, item_tag_sprite, show_found } from './item-cards';
+import { item_card, show_earned } from './item-cards';
 import type { PlayerItem } from '@/shared/api';
 
 /**
  * The title screen's card: the Ace of Spades, or the player's showcase item
- * (BalatroItemService): a joker with its edition and stake sticker, or a tag
- * on the Ace. Only a picture: items change nothing in a run.
+ * (BalatroItemService): a joker with its edition and stake sticker, a tarot,
+ * planet or spectral card, or a playing card with its upgrades. Only a
+ * picture: items change nothing in a run.
  */
 function title_card(item: PlayerItem | null, x: number, y: number, w: number, h: number): any {
-  const joker = item ? item_card(item, x, y, w, h) : null;
-  const card = joker ?? new Card(x, y, w, h, G.P_CARDS.S_A, G.P_CENTERS.c_base);
-  if (item && !joker) {
-    const tag = item_tag_sprite(item, 0.9 * w);
-    if (tag) {
-      tag.set_alignment({ major: card, type: 'cm', bond: 'Strong', offset: { x: 0, y: 0 } });
-      card.children.item_tag = tag;
-    }
-  }
-  return card;
+  return (item ? item_card(item, x, y, w, h) : null) ?? new Card(x, y, w, h, G.P_CARDS.S_A, G.P_CENTERS.c_base);
 }
 
-/** the player's items, once the title screen is up: new ones revealed, the showcase put on the title */
+/** the player's items, once the title screen is up: the coins earned told, the showcase put on the title */
 function show_items() {
   const on_menu = () => G.STAGE === G.STAGES.MAIN_MENU && G.MAIN_MENU_UI && !G.screenwipe;
   void look_for_items({
-    found: (found) => {
+    earned: (earned, balance) => {
       // (after any menu the player opened: the reveal is an overlay too)
       G.E_MANAGER.add_event(new Event({
         blockable: false, blocking: false, no_delete: true,
         func: () => {
           if (G.STAGE !== G.STAGES.MAIN_MENU) return true;
           if (!on_menu() || G.OVERLAY_MENU) return false;
-          show_found(found);
+          show_earned(earned, balance);
           return true;
         },
       }));

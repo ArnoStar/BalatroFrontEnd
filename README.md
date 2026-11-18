@@ -322,14 +322,17 @@ going to each card and button the action needs. A bar shows the
 progress, with Pause, Next step, Speed and Stop; at the end the copy is the
 viewer's to play on (it isn't listed or counted).
 
-**Items** (BalatroItemService, at `/items/`): the player's collectible jokers
-and tags with the game's editions. They change nothing in a run. The title
-screen shows the player's showcase item in place of the Ace (with its
-edition's shader and the stake sticker of the win it came from), and, each
-time the player comes back to it, reveals the items their runs have just
-earned (`pages/main-menu`). The collection and trading are on the portal's
-`/inventory` and `/trades`; the casino, where players stake their items
-against each other's, is its own front end (BalatroCasino) at `/casino/`.
+**Items** (BalatroItemService, at `/items/`): the player's collectible cards
+(jokers, tarot, planet and spectral cards, playing cards) with the upgrades
+the game gives them, and the coins their runs earn. They change nothing in a
+run. The title screen shows the player's showcase item in place of the Ace
+(drawn by the game's own Card: its edition's shader, a playing card's
+enhancement and seal, the stake sticker of the win it came from), and, each
+time the player comes back to it, tells the coins their runs have just earned
+(`pages/main-menu`). Coins buy boosters in the portal's `/shop`; the
+collection, the market and trading are on its `/inventory`, `/market` and
+`/trades`; the casino, where players stake their items against each other's,
+is its own front end (BalatroCasino) at `/casino/`.
 
 **Friends** (BalatroSocial, at `/social/`): the game tells the social
 service what a signed-in player is doing (in the menu; in a run, its deck,

@@ -1,6 +1,7 @@
 // The item service (BalatroItemService), at /items/ on the site: the player's
-// collectible items (the game's jokers and tags with an edition). They change
-// nothing in a run: the game shows them (the title screen, new finds).
+// collectible items (the game's cards with their upgrades) and the coins their
+// runs earn. Items change nothing in a run: the game shows them (the title
+// screen), and tells the coins earned.
 import { ApiError } from './client';
 import { access_token, refresh_session } from './session';
 import type { ProblemDetails } from './types';
@@ -9,10 +10,14 @@ export type ItemEdition = 'base' | 'foil' | 'holographic' | 'polychrome' | 'nega
 
 export interface PlayerItem {
   id: string;
-  kind: 'joker' | 'tag';
+  kind: 'joker' | 'tarot' | 'planet' | 'spectral' | 'card';
+  /** the game's key: a center's (j_joker, c_fool ...) or, for a playing card, its P_CARDS key (S_A ...) */
   key: string;
   name: string;
   edition: ItemEdition;
+  /** a playing card's enhancement (m_glass ...) and seal (Gold, Red, Blue, Purple) */
+  enhancement?: string | null;
+  seal?: string | null;
   rarity: 1 | 2 | 3 | 4;
   /** the stake of the win it came from (1 White ... 8 Gold): the game's stake sticker */
   stake: number | null;
@@ -22,7 +27,10 @@ export interface PlayerItem {
   source: string;
 }
 
-export interface ItemsMe { id: string; can_trade: boolean; items: number; showcase: PlayerItem | null }
+export interface ItemsMe { id: string; can_trade: boolean; items: number; coins: number; showcase: PlayerItem | null }
+
+/** a grant the player's runs earned: weekly, weekly_win, first_deck_win, first_stake_win */
+export interface EarnedCoins { source: string; reason: string; coins: number; run: string | null }
 
 /** the item service's base URL: VITE_ITEMS_URL, or /items on this origin */
 export function items_base(): string {
@@ -56,6 +64,6 @@ async function call<T>(method: string, path: string): Promise<T> {
 
 export const items = {
   me: () => call<ItemsMe>('GET', '/v1/me'),
-  /** the items the player's runs have earned since they last looked (each once) */
-  find: () => call<{ found: PlayerItem[] }>('POST', '/v1/me/drops'),
+  /** the coins the player's runs have earned since they last looked (each grant once) */
+  earn: () => call<{ earned: EarnedCoins[]; coins: number; balance: number }>('POST', '/v1/me/drops'),
 };
