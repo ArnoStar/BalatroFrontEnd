@@ -10,7 +10,7 @@ const RES = `${import.meta.env.BASE_URL}resources`;
 const COLLABS = ['AU', 'TW', 'VS', 'DTD', 'CYP', 'STS', 'TBoI', 'SV', 'SK', 'DS', 'CL', 'D2', 'PC', 'WF', 'EG', 'XR', 'CR', 'BUG', 'FO', 'DBD', 'C7', 'R', 'AC', 'STP'];
 
 const SHADERS = ['background', 'booster', 'CRT', 'debuff', 'dissolve', 'flame', 'flash', 'foil', 'gold_seal', 'holo', 'hologram',
-  'negative', 'negative_shine', 'played', 'polychrome', 'skew', 'splash', 'voucher', 'vortex'];
+  'negative', 'negative_shine', 'played', 'polychrome', 'skew', 'splash', 'voucher', 'vortex', 'wear'];
 
 async function set_render_settings(progress: (p: number) => void) {
   const ts = G.SETTINGS.GRAPHICS.texture_scaling;
