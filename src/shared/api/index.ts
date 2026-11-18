@@ -1,6 +1,6 @@
 export { api, ApiError, api_base, matches } from './client';
 export { reports, reports_base, type NewReport, type ReportView } from './reports';
-export { items, items_base, type ItemEdition, type ItemsMe, type PlayerItem } from './items';
+export { items, items_base, type EarnedCoins, type ItemEdition, type ItemsMe, type PlayerItem } from './items';
 export {
   social, social_api, social_base, type Activity, type ConversationView, type FriendRequestView, type FriendView, type InboxView,
   type InviteView, type SocialEvent,
