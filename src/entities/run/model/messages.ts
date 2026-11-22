@@ -101,7 +101,11 @@ export function joker_message(card: Card, key: string | null, c: MessageContext)
   let m: Msg | null = null;
   if (key && KEYS[key]) m = KEYS[key](card);
   else if (card.ability?.set === 'Joker' && JOKERS[card.ability.name]) m = JOKERS[card.ability.name](card.ability, c);
-  else if (card.debuff) m = [k('k_debuffed'), G.C.RED];
+  else if (key && card.config?.center?.mod_item) {
+    // a content mod's message: a key of the game's texts (k_upgrade_ex), or its own words
+    const known = G.localization.misc.dictionary[key] ?? G.localization.misc.v_dictionary?.[key];
+    m = [typeof known === 'string' ? known : key, key === 'k_debuffed' ? G.C.RED : G.C.FILTER];
+  } else if (card.debuff) m = [k('k_debuffed'), G.C.RED];
   if (!m || !m[0]) return null;
   const ex: StatusExtra = { message: m[0] };
   if (m[1]) ex.colour = m[1];

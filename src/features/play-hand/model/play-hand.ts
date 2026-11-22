@@ -6,7 +6,7 @@ import { G, Event, play_sound, delay } from '@/shared/lib/engine';
 import { api } from '@/shared/api';
 import { react_tags } from '@/entities/tag';
 import { check_and_set_high_score, count_usage, profile, save_profile } from '@/shared/config';
-import type { GameEvent } from '@/shared/api';
+import type { CreativeRequest, GameEvent } from '@/shared/api';
 import {
   run, perform, perform_debug, is_legal, legal, stop_use, ease_hands_played, ease_discard, ease_ante, highlight_card, update_hand_text_now,
   card_by_id, select_hand_after_draw, type Timeline,
@@ -118,6 +118,14 @@ export function register_play_hand_funcs() {
       e.config.button = 'discard_cards_from_highlighted';
     }
   };
+
+  /** creative mode (a run with a creative mod): a change played like an action (winning the round: its cues) */
+  G.FUNCS.creative_command = (change: CreativeRequest) => perform({ type: 'creative', ...change } as any, {
+    play: (tl) => {
+      if (change.op === 'win') after_round_cues(tl, new Set(), 0);
+      if (change.op === 'add' && String(change.key ?? '').startsWith('tag_')) react_tags(tl.view.tags);
+    },
+  }, () => api.creative(run.id!, change, run.view!.version));
 
   /** development: a debug command of the API (e.g. {cmd: 'cheat', win: true}), played like a hand */
   G.FUNCS.debug_command = (cmd: Record<string, unknown>) => perform_debug(cmd, {

@@ -153,6 +153,10 @@ function prepare(a: Action): Plan | null {
     }
     case 'continue': return { clicks: [], go: () => { void perform({ type: 'continue' }); } };
     case 'debug': return { clicks: [], go: () => G.FUNCS.debug_command(a.command) };
+    case 'creative': {
+      const { type: _t, ...change } = a as any;
+      return { clicks: [], go: () => G.FUNCS.creative_command(change) };
+    }
   }
   return null;
 }
@@ -185,6 +189,7 @@ const strip = (x: any) => JSON.stringify(x && typeof x === 'object' ? { ...x, ex
 /** the action as perform() records it (defaults filled in), to compare with the player's */
 function same_action(want: Action, got: any): boolean {
   if (want.type === 'debug') return got?.type === 'debug' || got?.command !== undefined;
+  if ((want as any).type === 'creative') return got?.type === 'creative' && got?.op === (want as any).op;
   const norm = (o: any) => {
     const r: any = { ...o };
     if (r.type === 'buy') r.use = !!r.use;

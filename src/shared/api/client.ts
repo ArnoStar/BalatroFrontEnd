@@ -6,6 +6,7 @@ import { recorder } from '@/shared/lib/recorder';
 import type {
   ActionResult, BlindChoice, CoopDecksView, CoopStepsView, EmoteName, GameSummaryView, MatchHistoryView, MultiplayerStats, GameView, HandPreview, HistoryView, MatchSettingsView, MatchView, MeView, NewGameRequest,
   NewMatchRequest, PlayerAction, ProblemDetails, WatchView,
+  CreativeRequest, ModCheck, ModDetailView, ModListView, ModPackage, ModSummaryView,
 } from './types';
 
 export class ApiError extends Error {
@@ -129,11 +130,31 @@ export const api = {
     request<ActionResult>('POST', `/games/${id}/debug`, { command, expected_version: expected_version ?? null }),
   history: (id: string) => request<HistoryView>('GET', `/games/${id}/history`),
   /** a run rebuilt from a history (admins, or servers with debug commands) */
-  importGame: (history: Pick<HistoryView, 'settings' | 'commands' | 'start_profile'>) => request<GameView>('POST', '/games/import', history),
+  importGame: (history: Pick<HistoryView, 'settings' | 'commands' | 'start_profile' | 'mod_packages'>) => request<GameView>('POST', '/games/import', history),
+  /** creative mode: change a run played with a creative mod */
+  creative: (id: string, change: CreativeRequest, expected_version?: number) =>
+    request<ActionResult>('POST', `/games/${id}/creative`, { ...change, expected_version: expected_version ?? null }),
   /** the player's settings and progress */
   me: () => request<MeView>('GET', '/players/me'),
   /** watch a run again: a copy at its start and the player's actions */
   watch: (id: string) => request<WatchView>('POST', `/games/${id}/watch`),
+};
+
+/** content mods: the registry (browse, publish, install), packages by hash */
+export const mods = {
+  list: (q: { q?: string; tag?: string; sort?: string; mine?: boolean; limit?: number; offset?: number } = {}) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '' && v !== false) p.set(k, String(v));
+    return request<ModListView>('GET', `/mods${p.size ? '?' + p : ''}`);
+  },
+  get: (id: string) => request<ModDetailView>('GET', `/mods/${encodeURIComponent(id)}`),
+  download: (id: string, version?: string) =>
+    request<ModPackage>('GET', `/mods/${encodeURIComponent(id)}/package${version ? '?version=' + encodeURIComponent(version) : ''}`),
+  package: (hash: string) => request<ModPackage>('GET', `/mods/packages/${hash}`),
+  validate: (pkg: unknown) => request<ModCheck>('POST', '/mods/validate', pkg),
+  publish: (pkg: ModPackage) => request<ModDetailView>('POST', '/mods', pkg),
+  install: (id: string) => request<ModSummaryView>('POST', `/mods/${encodeURIComponent(id)}/install`),
+  unlist: (id: string) => request<void>('DELETE', `/mods/${encodeURIComponent(id)}`),
 };
 
 /** multiplayer matches: a lobby with an invite code, then the players' runs (PvP) */

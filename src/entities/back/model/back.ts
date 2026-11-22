@@ -45,7 +45,7 @@ export class Back {
       case 'Painted Deck': loc_args = [ec.hand_size, ec.joker_slot]; break;
       case 'Anaglyph Deck': loc_args = [nt('tag_double', 'Tag')]; break;
       case 'Plasma Deck': loc_args = [ec.ante_scaling]; break;
-      default: break;
+      default: loc_args = back_config.mod_vars ?? null; break; // (a content mod's deck: its values, made with it)
     }
     localize({ type: 'descriptions', key: back_config.key, set: 'Back', nodes: loc_nodes, vars: loc_args });
     return { n: G.UIT.ROOT, config: { align: 'cm', minw: min_dims * 5, minh: min_dims * 2.5, id: this.name, colour: G.C.CLEAR }, nodes: [

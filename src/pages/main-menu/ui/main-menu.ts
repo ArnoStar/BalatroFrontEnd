@@ -12,6 +12,8 @@ import { Card, CardArea } from '@/entities/card';
 import { Back } from '@/entities/back';
 import { init_game_object } from '@/entities/run';
 import { fetch_saved_game } from '@/widgets/run-setup';
+import { mods_label } from '@/widgets/mods';
+import { use_enabled_mods } from '@/entities/mod';
 import { cached_showcase, look_for_items } from '../model/items';
 import { item_card, show_earned } from './item-cards';
 import type { PlayerItem } from '@/shared/api';
@@ -86,6 +88,11 @@ function create_UIBox_main_menu_buttons() {
         ] },
       ] },
       { n: G.UIT.C, config: { align: 'br', minw: 3.2, padding: 0.1 }, nodes: [
+        // (not in the game: MODS, widgets/mods)
+        { n: G.UIT.R, config: { align: 'cm', padding: 0.1, r: 0.1, emboss: 0.1, colour: G.C.L_BLACK }, nodes: [
+          UIBox_button({ id: 'main_menu_mods', button: 'mods_menu', colour: G.C.SECONDARY_SET.Spectral, minw: 2.2, minh: 0.7, label: [mods_label()], scale: text_scale * 0.95, col: true }),
+        ] },
+        { n: G.UIT.R, config: { minh: 0.15 }, nodes: [] },
         !G.F_ENGLISH_ONLY ? { n: G.UIT.R, config: { align: 'cm', padding: 0.2, r: 0.1, emboss: 0.1, colour: G.C.L_BLACK }, nodes: [
           { n: G.UIT.R, config: { align: 'cm', padding: 0.15, minw: 1, r: 0.1, hover: true, colour: mix_colours(G.C.WHITE, G.C.GREY, 0.2), button: 'language_selection', shadow: true }, nodes: [
             { n: G.UIT.O, config: { object: language } },
@@ -134,6 +141,8 @@ function set_main_menu_UI() {
 
 /** Game:main_menu: change_context is 'splash' after the splash screen, 'game' when leaving a run */
 export function main_menu(change_context?: 'splash' | 'game') {
+  // the enabled mods' items in the game's tables (the collection, the run setup's decks)
+  void use_enabled_mods().catch((err) => console.warn('[mods]', err));
   if (change_context !== 'splash') {
     G.TIMERS.REAL = 12;
     G.TIMERS.TOTAL = 12;

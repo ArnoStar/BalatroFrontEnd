@@ -6,6 +6,7 @@ import { localize } from '@/shared/lib/localization';
 import { profile } from '@/shared/config';
 import { desc_from_rows, info_tip_from_rows, name_from_rows, create_badge, get_badge_colour } from '@/shared/ui';
 import type { Def } from '@/shared/ui';
+import { mod_loc_vars } from '@/entities/mod/@x/card';
 
 const prob = () => '' + tostring(G.GAME?.probabilities?.normal ?? 1);
 
@@ -256,7 +257,10 @@ function joker_loc_vars(card: any): { loc_vars: any; main_start?: any; main_end?
     case 'Bootstraps': return { loc_vars: [x.mult, x.dollars, x.mult * Math.floor((G.GAME.dollars + (G.GAME.dollar_buffer ?? 0)) / x.dollars)] };
     case 'Caino': return { loc_vars: [x, a.caino_xmult] };
     case 'Yorick': return { loc_vars: [x.xmult, x.discards, a.yorick_discards, a.x_mult] };
-    default: return { loc_vars: null };
+    default:
+      // a content mod's joker: its description's values from its own (ability.extra)
+      if (card.config.center.mod_item) return { loc_vars: mod_loc_vars(card.config.center.mod_item, x, card) };
+      return { loc_vars: null };
   }
 }
 
@@ -358,6 +362,9 @@ export function generate_card_ui(_c: any, full_UI_table: any, specific_vars?: an
     };
     if (tq[_c.name]) info_queue.push(G.P_CENTERS[tq[_c.name]]);
     localize({ type: 'descriptions', key: _c.key, set: 'Tag', nodes: desc_nodes, vars: specific_vars ?? [] });
+  } else if (_c.mod_item && _c.set !== 'Planet') {
+    // a content mod's consumable or voucher: its description's values from its config and the run
+    localize({ type: 'descriptions', key: _c.key, set: _c.set, nodes: desc_nodes, vars: mod_loc_vars(_c.mod_item, null) });
   } else if (_c.set === 'Voucher') {
     const nm = _c.name;
     if (['Tarot Merchant', 'Tarot Tycoon', 'Planet Merchant', 'Planet Tycoon'].includes(nm)) loc_vars = [_c.config.extra_disp];
@@ -423,6 +430,8 @@ export function generate_card_ui(_c: any, full_UI_table: any, specific_vars?: an
     if (nm === 'Ectoplasm') { info_queue.push(G.P_CENTERS.e_negative); loc_vars = [G.GAME?.ecto_minus ?? 1]; }
     if (nm === 'Aura') info_queue.push(G.P_CENTERS.e_foil, G.P_CENTERS.e_holo, G.P_CENTERS.e_polychrome);
     localize({ type: 'descriptions', key: _c.key, set: _c.set, nodes: desc_nodes, vars: loc_vars });
+  } else if (_c.set === 'Planet' && _c.mod_item && !_c.config.hand_type) {
+    localize({ type: 'descriptions', key: _c.key, set: _c.set, nodes: desc_nodes, vars: mod_loc_vars(_c.mod_item, null) });
   } else if (_c.set === 'Planet') {
     const h = G.GAME.hands[_c.config.hand_type];
     loc_vars = withProps([h.level, localize(_c.config.hand_type, 'poker_hands'), h.l_mult, h.l_chips], {

@@ -113,6 +113,10 @@ export async function init_languages() {
   }
 }
 
+const language_hooks = new Set<() => void>();
+/** called after the game's text changes language (what adds its own texts adds them again) */
+export function on_language_change(f: () => void) { language_hooks.add(f); }
+
 /** loads a language's text and font, then makes it the game's (G.LANG, G.localization) */
 export async function use_language(key: string) {
   const lang = G.LANGUAGES[key] ?? G.LANGUAGES['en-us'];
@@ -121,4 +125,5 @@ export async function use_language(key: string) {
   G.LANG = lang;
   G.localization = text;
   init_localization();
+  for (const f of language_hooks) f();
 }

@@ -125,6 +125,44 @@ its lobby); each new one pops up.
 With the API's sign-in off, everyone is one player: open the game with
 `?player=<name>` in each tab (kept for the tab) to play a match alone.
 
+## Mods
+
+The title screen's MODS button (`widgets/mods`, not in the original game)
+opens the player's mods, drawn as the game's own menus. Content mods are JSON
+packages in BalatroEngine's format (its `docs/mods.md`): new jokers,
+consumables, vouchers, decks, boss blinds and rules, or creative mode. They
+are data, never code: the API checks them and the engine plays them.
+
+- **Installed**: each mod ON or OFF (new runs are played with the mods that
+  are on; a run with mods doesn't count for statistics or unlocks), its info
+  with the cards it adds, Export (the package as a `.json` file), remove.
+  Import a mod from a file (the button, or drop the file on the game); an
+  imported mod can be published.
+- **Browse**: the community's mods (the API's `/mods`): search, sort, install,
+  update. The engine's examples are there as official mods (Fruit Stand,
+  Wild Rules, Creative Mode).
+
+The installed mods live in the browser (IndexedDB, `entities/mod`). The game
+puts a set of mods in its tables at a time (`use_mods`: centers, pools,
+blinds, texts in the game's language, a package's images as atlases): the
+enabled mods in the menus (the collection, the run setup's decks), a run's
+own mods (`settings.mods`, packages fetched by hash when the library hasn't
+them) while it is open. A mod item's description values are its `vars`,
+evaluated by `shared/lib/mod-expr`, the twin of the engine's expression
+language.
+
+**Creative mode** (a run with a creative mod, `features/creative`): a
+CREATIVE button under the joker row opens a panel to change the money,
+hands, discards, hand size, slots, ante and hand levels, add any card,
+voucher, tag or playing card (the run's mods' first), edit or remove the
+selected card, choose the boss or win the round. Each change goes through the
+API's `POST /games/{id}/creative`, so the run replays with it.
+
+`node scripts/mods-e2e.mjs` plays it all in the real UI (installs the
+official mods, opens a run on a mod's deck, uses creative mode, scores with a
+mod's joker, a mod's boss) and saves screenshots (API with sign-in off and
+debug commands, dev server on).
+
 ## Run the whole site
 
 The site is six parts, each in its own repository next to this one: the
