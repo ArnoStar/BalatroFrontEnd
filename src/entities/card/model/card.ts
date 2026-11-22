@@ -203,7 +203,8 @@ export class Card extends Moveable {
               (_center.set === 'Spectral' && G.s_undiscovered.pos) || (_center.set === 'Voucher' && G.v_undiscovered.pos) ||
               (_center.set === 'Booster' && G.booster_undiscovered.pos);
           } else if (_center.set === 'Joker' || _center.consumeable || _center.set === 'Voucher') {
-            atlas = G.ASSET_ATLAS[_center.set]; pos = cc.pos;
+            // (a mod's card may have its own art: an atlas of its own)
+            atlas = G.ASSET_ATLAS[_center.atlas ?? _center.set] ?? G.ASSET_ATLAS[_center.set]; pos = cc.pos;
           } else {
             atlas = G.ASSET_ATLAS[_center.atlas ?? 'centers']; pos = _center.pos;
           }

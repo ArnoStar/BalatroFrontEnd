@@ -7,6 +7,8 @@ export interface SettingsView {
   seed: string; deck: string; stake: number; challenge: string | null; game_speed: number; seeded?: boolean;
   /** a multiplayer run's mode ('pvp': a lost round costs hit points instead of the run) */
   mode?: string | null;
+  /** the content mods the run is played with (their items are in the game's tables while it is open) */
+  mods?: ModRefView[];
 }
 
 export interface Stickers { eternal: boolean; perishable: number | null; rental: boolean }
@@ -64,7 +66,9 @@ export interface RunInfo {
 }
 
 export type ActionType = 'select_blind' | 'skip_blind' | 'reroll_boss' | 'play' | 'discard' | 'sort' | 'cash_out' | 'buy' | 'continue'
-  | 'reroll' | 'end_shop' | 'use' | 'sell' | 'move' | 'pick' | 'skip_pack';
+  | 'reroll' | 'end_shop' | 'use' | 'sell' | 'move' | 'pick' | 'skip_pack'
+  /** (a legal action only: a run with a creative mod, POST /games/{id}/creative) */
+  | 'creative';
 
 export interface LegalAction {
   type: ActionType; card: number | null; area: Area | null; use: boolean | null; mode: 'rank' | 'suit' | null;
@@ -133,7 +137,35 @@ export type PlayerAction =
   | { type: 'sell'; card: number }
   | { type: 'move'; card: number; to: number };
 
-export interface NewGameRequest { seed?: string | null; deck?: string; stake?: number; challenge?: string | null; game_speed?: number }
+/** a mod to play a run with: a package (an imported file), a published mod's id (and version), or a kept package's hash */
+export interface ModChoice { package?: ModPackage; id?: string; version?: string; hash?: string }
+export interface NewGameRequest { seed?: string | null; deck?: string; stake?: number; challenge?: string | null; game_speed?: number; mods?: ModChoice[] }
+
+// ------------------------------------------------------------------ content mods
+/** a content mod's package: BalatroEngine's format (its docs/mods.md), JSON */
+export interface ModPackage {
+  format: 1; id: string; name: string; version: string; author?: string; description?: string; tags?: string[];
+  loc?: Record<string, { name?: string; description?: string }>;
+  rules?: Record<string, number>; creative?: boolean;
+  jokers?: any[]; consumables?: any[]; vouchers?: any[]; decks?: any[]; blinds?: any[];
+  assets?: Record<string, string>;
+}
+/** a mod a run is played with: its package is GET /mods/packages/{hash} */
+export interface ModRefView { id: string; version: string; hash: string; name: string; creative: boolean }
+export interface ModCheck { valid: boolean; errors: string[]; id: string | null; version: string | null; name: string | null; hash: string | null; summary: Record<string, any>; size: number }
+export interface ModSummaryView {
+  id: string; name: string; version: string; hash: string; description: string; tags: string[]; author: string | null;
+  official: boolean; installs: number; summary: Record<string, any>; created_at: string; updated_at: string;
+  loc: Record<string, { name?: string; description?: string }>; yours: boolean;
+}
+export interface ModDetailView extends ModSummaryView { versions: { version: string; hash: string; created_at: string; size: number }[] }
+export interface ModListView { items: ModSummaryView[]; total: number }
+/** a creative mode change (BalatroEngine's docs/mods.md) */
+export interface CreativeRequest {
+  op: 'set' | 'level' | 'add' | 'add_card' | 'edit' | 'remove' | 'boss' | 'win';
+  what?: string; value?: number; hand?: string; key?: string; card?: number; edition?: string; seal?: string;
+  enhancement?: string; rank?: string; suit?: string; to?: 'hand' | 'deck'; eternal?: boolean; perishable?: boolean; rental?: boolean;
+}
 
 export interface Sprite { atlas: string; pos: { x: number; y: number }; soul_pos: { x: number; y: number } | null }
 export interface ChallengeItem { id: string; name: string; deck: string; jokers: string[]; consumables: string[]; vouchers: string[] }
@@ -148,10 +180,12 @@ export interface HistoryView {
   id: string;
   version: number;
   engine_version: string;
-  settings: { seed: string; deck: string; stake: number; challenge: string | null; game_speed: number; seeded?: boolean };
+  settings: { seed: string; deck: string; stake: number; challenge: string | null; game_speed: number; seeded?: boolean; mods?: ModRefView[] };
   commands: Record<string, unknown>[];
   /** the player's progress the run started from (null: from before progress was kept, fully unlocked) */
   start_profile?: Record<string, unknown> | null;
+  /** the logic of the run's mods, by hash (a rebuild sends them back) */
+  mod_packages?: Record<string, Record<string, unknown>>;
 }
 
 /** the player's progress (GET /players/me): what the game's profile has unlocked and discovered */

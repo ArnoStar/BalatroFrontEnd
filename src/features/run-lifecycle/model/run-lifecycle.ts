@@ -8,6 +8,11 @@ import { apply_progress, progress_of_profile } from '@/shared/config';
 import { recorder } from '@/shared/lib/recorder';
 import { Card } from '@/entities/card';
 import { clear_run, stop_playing } from '@/entities/run';
+import { enabled_choices, use_run_mods, use_enabled_mods } from '@/entities/mod';
+import type { ModRefView } from '@/shared/api';
+
+/** the mods of the run on screen (a quick restart plays with them again) */
+let run_mods: ModRefView[] = [];
 
 export function wipe_on(message?: string[], no_card?: boolean, timefac = 1, alt_colour?: any) {
   if (G.screenwipe) return;
@@ -123,8 +128,12 @@ export function start_run(req: NewGameRequest | null, open_id?: string, continue
         return r.game;
       }).catch(() => v)
       : v))
-    : api.newGame(req ?? {});
-  p.then((v) => {
+    // (a new run is played with the enabled mods, unless it names its own)
+    : (req?.mods ? Promise.resolve(req.mods) : enabled_choices().catch(() => [])).then((mods) => api.newGame({ ...(req ?? {}), mods }));
+  p.then(async (v) => {
+    // the run's mods in the game's tables before its cards are made
+    await use_run_mods(v.settings.mods);
+    run_mods = v.settings.mods ?? [];
     got.view = v;
     if (req?.seed) { try { localStorage.setItem('balatro-fe.seeded.' + v.id, '1'); } catch { /* no storage */ } }
   }).catch((err) => { got.error = err ?? 'error'; console.error('[api]', err); });
@@ -132,12 +141,18 @@ export function start_run(req: NewGameRequest | null, open_id?: string, continue
   G.E_MANAGER.add_event(new Event({
     trigger: 'immediate', no_delete: true,
     func: () => {
-      if (got.error) { G.main_menu('game'); return true; }
+      if (got.error) {
+        void use_enabled_mods().catch(() => undefined);
+        show_start_error(got.error);
+        G.main_menu('game');
+        return true;
+      }
       if (!got.view || got.progress === undefined) return false;
       if (got.progress) apply_progress(got.progress);
       // where a bug report's replay can start: this run, opened at this version
       recorder.record('run', { id: got.view.id, version: got.view.version });
       G.start_run_page(got.view);
+      G.FUNCS.creative_on_run?.(got.view); // (features/creative: its button, in a run with a creative mod)
       // what continuing unlocked (Throwback): unlock_card's notification, once the run is on screen
       for (const u of got.unlocked) {
         if (G.P_CENTERS[u.key]) G.P_CENTERS[u.key].unlocked = true;
@@ -147,6 +162,17 @@ export function start_run(req: NewGameRequest | null, open_id?: string, continue
     },
   }));
   wipe_off();
+}
+
+/** why a run didn't start: an invalid mod says what is wrong with it */
+function show_start_error(err: unknown) {
+  const e = err as { code?: string; problem?: { errors?: string[]; detail?: string } | null; message?: string };
+  if (e?.code !== 'invalid_mod' && e?.code !== 'mod_not_found' && e?.code !== 'invalid_settings') return;
+  const lines = [e.problem?.detail ?? e.message ?? String(err), ...(e.problem?.errors ?? []).slice(0, 3)];
+  G.E_MANAGER.add_event(new Event({
+    trigger: 'after', delay: 1.5, blocking: false, blockable: false,
+    func: () => { G.FUNCS.mods_notice?.(lines); return true; },
+  }));
 }
 
 export function register_run_lifecycle_funcs() {
@@ -160,7 +186,12 @@ export function register_run_lifecycle_funcs() {
     G.E_MANAGER.clear_queue();
     wipe_on();
     G.E_MANAGER.add_event(new Event({ no_delete: true, func: () => { stop_playing(); delete_run(); clear_run(); return true; } }));
-    G.E_MANAGER.add_event(new Event({ no_delete: true, blockable: true, blocking: false, func: () => { G.main_menu('game'); return true; } }));
+    G.E_MANAGER.add_event(new Event({ no_delete: true, blockable: true, blocking: false, func: () => {
+      run_mods = [];
+      void use_enabled_mods().catch((err) => console.warn('[mods]', err));
+      G.main_menu('game');
+      return true;
+    } }));
     wipe_off();
   };
 
@@ -177,6 +208,6 @@ export function register_run_lifecycle_funcs() {
   G.FUNCS.quick_restart = () => {
     if (G.STAGE !== G.STAGES.RUN) return;
     const s = G.GAME.selected_back_key?.key ?? 'b_red';
-    start_run({ deck: s, stake: G.GAME.stake ?? 1, game_speed: G.SETTINGS.GAMESPEED });
+    start_run({ deck: s, stake: G.GAME.stake ?? 1, game_speed: G.SETTINGS.GAMESPEED, mods: run_mods.map((m) => ({ hash: m.hash })) });
   };
 }
