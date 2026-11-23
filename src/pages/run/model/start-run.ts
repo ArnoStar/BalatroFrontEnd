@@ -162,7 +162,8 @@ export function start_run(view: GameView) {
 
   try {
     G.GAME.round_scores.hand.amt = Number(localStorage.getItem('balatro-fe.best.' + view.id) ?? 0);
-    G.GAME.seeded = !!localStorage.getItem('balatro-fe.seeded.' + view.id);
+    // (a seed the player chose, or a multiplayer run's: neither counts for the profile's streaks)
+    G.GAME.seeded = !!view.settings.seeded || !!localStorage.getItem('balatro-fe.seeded.' + view.id);
   } catch { /* no storage */ }
   if (view.phase === 'shop') G.load_shop_from_view = true;
   if (view.phase === 'pack') {

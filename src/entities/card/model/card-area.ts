@@ -4,8 +4,24 @@ import { G, Moveable, UIBox, Event, play_sound, add_to_drawhash, remove_all, arr
 import { localize } from '@/shared/lib/localization';
 import type { Card } from './card';
 
+/**
+ * An area's cards shown in groups side by side, each in its own box with its
+ * own count and label (coop: each player's jokers). The cards stay one area,
+ * each group's together, in the groups' order.
+ */
+export interface CardGroups {
+  /** a card's group (its index; null: the first) */
+  of: (card: Card) => number | null | undefined;
+  /** each group's label, its colour and its slots */
+  info: () => { label: string; colour: number[]; limit: number }[];
+}
+
+/** the space between two groups' boxes */
+const GROUP_GAP = 0.3;
+
 export interface CardAreaConfig {
   [key: string]: any;
+  groups?: CardGroups | null;
   card_limit?: number;
   type?: 'deck' | 'discard' | 'hand' | 'play' | 'joker' | 'consumeable' | 'shop' | 'title' | 'title_2' | 'voucher';
   highlight_limit?: number;
@@ -180,6 +196,56 @@ export class CardArea extends Moveable {
     }
     this.config.temp_limit = Math.max(this.cards.length, this.config.card_limit);
     this.config.card_count = this.cards.length;
+    if (this.config.groups) this.count_groups();
+  }
+
+  /** shows the cards in groups (null: all together again) */
+  set_groups(groups: CardGroups | null) {
+    if (this.config.groups === groups) return;
+    this.config.groups = groups;
+    this.config.group_counts = groups ? [] : undefined;
+    if (this.children.area_uibox) { this.children.area_uibox.remove(); this.children.area_uibox = null; }
+    if (groups) this.count_groups();
+  }
+
+  private group_of(card: Card, n: number): number {
+    return Math.min(Math.max(this.config.groups?.of(card) ?? 0, 0), n - 1);
+  }
+
+  /** each group's count, slots and label, for its box (the texts read them) */
+  private count_groups() {
+    const info = this.config.groups!.info();
+    const counts: any[] = this.config.group_counts;
+    info.forEach((g, i) => {
+      const c = counts[i] ?? (counts[i] = {});
+      c.card_count = this.cards.filter((card) => this.group_of(card, info.length) === i).length;
+      c.card_limit = g.limit;
+      c.label = g.label;
+    });
+  }
+
+  /** the groups' boxes, side by side, each with its label and count under it */
+  private groups_definition(): any {
+    const info = this.config.groups!.info();
+    this.count_groups();
+    const n = Math.max(info.length, 1);
+    const gw = (this.T.w - GROUP_GAP * (n - 1)) / n;
+    const cols: any[] = [];
+    info.forEach((g, i) => {
+      if (i > 0) cols.push({ n: G.UIT.C, config: { minw: GROUP_GAP - 0.2 }, nodes: [] });
+      const c = this.config.group_counts[i];
+      cols.push({ n: G.UIT.C, config: { align: 'tm' }, nodes: [
+        { n: G.UIT.R, config: { minw: gw, minh: this.T.h, align: 'cm', padding: 0.1, r: 0.1, colour: [0, 0, 0, 0.1], outline: 0.6, outline_colour: adjust_alpha(g.colour, 0.35) }, nodes: [] },
+        { n: G.UIT.R, config: { align: i === 0 ? 'cl' : 'cr', minw: gw, padding: 0.03, no_fill: true }, nodes: [
+          ...(i === 0 ? [] : [{ n: G.UIT.T, config: { ref_table: c, ref_value: 'label', scale: 0.32, colour: g.colour, shadow: true } }, { n: G.UIT.B, config: { w: 0.15, h: 0.1 } }]),
+          { n: G.UIT.T, config: { ref_table: c, ref_value: 'card_count', scale: 0.3, colour: G.C.WHITE } },
+          { n: G.UIT.T, config: { text: '/', scale: 0.3, colour: G.C.WHITE } },
+          { n: G.UIT.T, config: { ref_table: c, ref_value: 'card_limit', scale: 0.3, colour: G.C.WHITE } },
+          ...(i === 0 ? [{ n: G.UIT.B, config: { w: 0.15, h: 0.1 } }, { n: G.UIT.T, config: { ref_table: c, ref_value: 'label', scale: 0.32, colour: g.colour, shadow: true } }] : []),
+        ] },
+      ] });
+    });
+    return { n: G.UIT.ROOT, config: { align: 'cm', colour: G.C.CLEAR }, nodes: [{ n: G.UIT.R, config: { align: 'tm' }, nodes: cols }] };
   }
 
   draw() {
@@ -195,6 +261,12 @@ export class CardArea extends Moveable {
       (this.config.type === 'shop' && this !== G.shop_vouchers)) {
       // no area box
     } else {
+      if (!this.children.area_uibox && this.config.groups) {
+        this.children.area_uibox = new UIBox({
+          definition: this.groups_definition(),
+          config: { align: 'cm', offset: { x: 0, y: 0 }, major: this, parent: this },
+        });
+      }
       if (!this.children.area_uibox) {
         const card_count = this !== G.shop_vouchers ? {
           n: G.UIT.R, config: { align: this === G.jokers ? 'cl' : this === G.hand ? 'cm' : 'cr', padding: 0.03, no_fill: true }, nodes: [
@@ -369,7 +441,9 @@ export class CardArea extends Moveable {
       });
       this.cards.sort(byX);
     }
-    if (t === 'joker' || t === 'title_2') {
+    if (t === 'joker' && this.config.groups) {
+      this.align_groups(rm);
+    } else if (t === 'joker' || t === 'title_2') {
       this.cards.forEach((card, i) => {
         const k = i + 1;
         if (!card.states.drag.is) {
@@ -407,6 +481,34 @@ export class CardArea extends Moveable {
     }
     this.cards.forEach((card, i) => { card.rank = i + 1; });
     if (this.children.view_deck) this.children.view_deck.set_role({ major: this.cards[0] ?? this });
+  }
+
+  /** the joker layout (align_cards), in each group's own box */
+  private align_groups(rm: number) {
+    const info = this.config.groups!.info();
+    const count = Math.max(info.length, 1);
+    const gw = (this.T.w - GROUP_GAP * (count - 1)) / count;
+    const groups: Card[][] = Array.from({ length: count }, () => []);
+    for (const c of this.cards) groups[this.group_of(c, count)].push(c);
+    groups.forEach((cards, gi) => {
+      const x0 = this.T.x + gi * (gw + GROUP_GAP);
+      const n = cards.length;
+      cards.forEach((card, i) => {
+        const k = i + 1;
+        if (card.states.drag.is) return;
+        card.T.r = 0.1 * (-n / 2 - 0.5 + k) / n + rm * 0.02 * Math.sin(2 * G.TIMERS.REAL + card.T.x);
+        if (n > 2) card.T.x = x0 + (gw - this.card_w) * ((k - 1) / (n - 1)) + 0.5 * (this.card_w - card.T.w);
+        else if (n > 1) card.T.x = x0 + (gw - this.card_w) * ((k - 0.5) / n) + 0.5 * (this.card_w - card.T.w);
+        else card.T.x = x0 + gw / 2 - this.card_w / 2 + 0.5 * (this.card_w - card.T.w);
+        const hh = card.highlighted ? G.HIGHLIGHT_H / 2 : 0;
+        card.T.y = this.T.y + this.T.h / 2 - card.T.h / 2 - hh + rm * 0.03 * Math.sin(0.666 * G.TIMERS.REAL + card.T.x);
+        card.T.x = card.T.x + card.shadow_parrallax.x / 30;
+      });
+    });
+    // (each group's cards together, in the order shown; pinned cards first, as align_cards)
+    const pin = (c: any) => (c.pinned ? (c.api_id ?? c.sort_id) : 0);
+    const x = (c: Card) => c.T.x + c.T.w / 2 - 100 * pin(c);
+    this.cards.sort((a, b) => (this.group_of(a, count) - this.group_of(b, count)) || (x(a) - x(b)));
   }
 
   hard_set_T(X?: number, Y?: number, W?: number, H?: number) {

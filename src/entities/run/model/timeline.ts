@@ -279,11 +279,13 @@ export class Timeline {
   }
 
   /**
-   * coop: the turn passes, and the other player's hand comes up: the hand on the
-   * table goes, theirs comes in (the cards they kept from their last turn at
-   * once, those they draw with the draw's events)
+   * coop: the turn passes. With a deck each (mode_rules 1), the other player's
+   * hand comes up: the hand on the table goes, theirs comes in (the cards they
+   * kept from their last turn at once, those they draw with the draw's events)
    */
   private turn(e: Ev & { type: 'turn' }) {
+    G.FUNCS.coop_turn?.(e.seat); // (features/multiplayer: the turn's announcement)
+    if (this.view.coop?.shared_deck) return; // (one hand for both: the other player goes on with it)
     const drawn = new Set<number>();
     for (const x of this.events) if (x.t >= e.t && x.type === 'card_moved' && x.to === 'hand') drawn.add(x.card);
     for (const c of [...G.hand.cards]) {
@@ -392,6 +394,7 @@ export class Timeline {
     const card = card_by_id(e.card);
     if (!card) return;
     if (e.view && !e.view.face_down && card.facing === 'front') apply_card_view(card, e.view);
+    if (e.change === 'enhancement') return; // (set_ability's delayed sprites: its juice is an event of its own)
     if (e.change === 'seal') {
       card.juice_up(0.3, 0.3);
       play_sound('gold_seal', 1.2, 0.4);

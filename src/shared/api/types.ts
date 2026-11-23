@@ -7,6 +7,8 @@ export interface SettingsView {
   seed: string; deck: string; stake: number; challenge: string | null; game_speed: number; seeded?: boolean;
   /** a multiplayer run's mode ('pvp': a lost round costs hit points instead of the run) */
   mode?: string | null;
+  /** the version of the mode's rules (coop: 2, one deck for both; 1 or none, a deck each): send it back with the history */
+  mode_rules?: number | null;
   /** the content mods the run is played with (their items are in the game's tables while it is open) */
   mods?: ModRefView[];
 }
@@ -117,7 +119,7 @@ export type GameEvent =
   /** a card wiggles: juice_up(scale, rot), null: its defaults (APIs before shop_slots: juice_card's 0.7) */
   | { type: 'card_juiced'; t: number; card: number; scale?: number | null; rot?: number | null }
   /** the card shines with its new edition or seal (Aura, Hex, Deja Vu...); `view` is how it looks */
-  | { type: 'card_changed'; t: number; card: number; change: 'edition' | 'seal'; view?: CardView | null }
+  | { type: 'card_changed'; t: number; card: number; change: 'edition' | 'seal' | 'enhancement'; view?: CardView | null }
   /** attention_text over a card; `key` is the text's localization key (k_nope_ex: The Wheel of Fortune missed) */
   | { type: 'attention_text'; t: number; card: number; key: string }
   /** the player has just unlocked a joker, voucher or deck (the game's "Unlocked!" notification) */
@@ -286,10 +288,16 @@ export interface CoopDecksView { seats: CoopDeckView[] }
 export interface CoopView {
   seat: number | null; turn: number; your_turn: boolean; joker_slots: number[]; shop_votes: number[];
   pack_seat: number | null; seats: CoopSeatView[];
+  /** one deck and hand for both players (else each has their own: mode_rules 1) */
+  shared_deck?: boolean;
 }
 export interface CoopSeatView {
   deck: number; hand: number; hands?: number; chips?: Score; best_hand?: Score; best_hand_name?: string | null; discards?: number;
 }
-export interface CoopMatchView { turn: number; your_turn: boolean; selection: number[]; selection_seq: number; over: boolean }
+export interface CoopMatchView {
+  turn: number; your_turn: boolean; selection: number[]; selection_seq: number; over: boolean;
+  /** whose selection it is: the turn's player's, or the pack's opener's while it is open */
+  selecting?: number | null;
+}
 export interface CoopStep { version: number; seat: number; action: Record<string, any>; events: GameEvent[]; game: GameView }
 export interface CoopStepsView { steps: CoopStep[]; complete: boolean }
