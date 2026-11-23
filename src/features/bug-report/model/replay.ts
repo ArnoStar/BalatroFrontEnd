@@ -62,9 +62,10 @@ export function make_plan(report: Pick<ReportView, 'game_id' | 'game_version' | 
 
 function dispatch(e: RecordedEvent) {
   const [x, y] = typeof e.x === 'number' ? to_screen(e.x, e.y as number) : [0, 0];
-  if (e.type === 'move') pointer_move(x, y);
-  else if (e.type === 'down') pointer_down(x, y, Number(e.button ?? 0));
-  else if (e.type === 'up') pointer_up(x, y, Number(e.button ?? 0));
+  const touch = e.touch === true;
+  if (e.type === 'move') pointer_move(x, y, touch);
+  else if (e.type === 'down') pointer_down(x, y, Number(e.button ?? 0), touch);
+  else if (e.type === 'up') pointer_up(x, y, Number(e.button ?? 0), touch);
   else if (e.type === 'key') key_down(String(e.key));
   else if (e.type === 'keyup') key_up(String(e.key));
 }

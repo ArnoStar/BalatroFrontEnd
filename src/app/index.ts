@@ -10,7 +10,7 @@ import { show_splash } from '@/pages/splash';
 import { main_menu } from '@/pages/main-menu';
 import { run } from '@/entities/run';
 import { SigningIn } from '@/shared/api';
-import { input_state, key_down, key_up, pointer_down, pointer_move, pointer_up } from '@/shared/lib/input';
+import { input_state, key_down, key_up, pointer_down, pointer_move, pointer_up, soft_keyboard } from '@/shared/lib/input';
 import { recorder } from '@/shared/lib/recorder';
 import { pointer_trace } from '@/shared/lib/pointer-trace';
 import { register_bug_report_funcs, start_replay_if_asked } from '@/features/bug-report';
@@ -19,11 +19,12 @@ import { start_presence } from '@/features/social-presence';
 import { open_seed_link_if_asked } from '@/features/seed-link';
 import { open_match_link_if_asked } from '@/features/multiplayer';
 import { start_notifications } from '@/features/notifications';
+import { fill_screen, pixel_ratio, set_up_screen } from './mobile/screen';
 
 const canvas = document.getElementById('screen') as HTMLCanvasElement;
 
 function fit_canvas() {
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = pixel_ratio();
   const w = Math.max(100, Math.floor(window.innerWidth * dpr));
   const h = Math.max(100, Math.floor(window.innerHeight * dpr));
   if (canvas.width !== w || canvas.height !== h) {
@@ -32,6 +33,11 @@ function fit_canvas() {
     return true;
   }
   return false;
+}
+
+/** the window changed size (a phone turned, its browser bars came or went) */
+function refit() {
+  if (fit_canvas() && G.window_prev) resize(canvas.width, canvas.height);
 }
 
 /** boot_timer: the game's loading bar */
@@ -53,20 +59,72 @@ function loading_bar(progress: number) {
 }
 
 function wire_input() {
-  const dpr = () => window.devicePixelRatio || 1;
-  const pos = (e: MouseEvent): [number, number] => {
+  const pos = (e: { clientX: number; clientY: number }): [number, number] => {
     const r = canvas.getBoundingClientRect();
-    return [(e.clientX - r.left) * dpr(), (e.clientY - r.top) * dpr()];
+    return [(e.clientX - r.left) * canvas.width / r.width, (e.clientY - r.top) * canvas.height / r.height];
   };
   // (during a bug report's replay, the replay is the player)
   const live = () => !input_state.replaying;
-  canvas.addEventListener('mousemove', (e) => live() && pointer_move(...pos(e)));
+  // (a browser may follow a touch with the mouse events of a click: the touch was the input)
+  let touched_at = -Infinity;
+  const mouse = () => live() && performance.now() - touched_at > 1000;
+  canvas.addEventListener('mousemove', (e) => mouse() && pointer_move(...pos(e)));
   canvas.addEventListener('mousedown', (e) => {
     love.audio.resume();
     canvas.focus();
-    if (live()) pointer_down(...pos(e), e.button);
+    if (mouse()) pointer_down(...pos(e), e.button);
   });
-  window.addEventListener('mouseup', (e) => live() && pointer_up(...pos(e), e.button));
+  window.addEventListener('mouseup', (e) => mouse() && pointer_up(...pos(e), e.button));
+
+  // Touch: the first finger is the pointer (tap = click, hold = hover, slide = drag); a second
+  // finger is the right button (it unselects the hand's cards). The page doesn't scroll or zoom.
+  let finger: number | null = null;
+  let at: [number, number] = [0, 0]; // where it is
+  const find = (e: TouchEvent) => Array.from(e.changedTouches).find((t) => t.identifier === finger);
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    touched_at = performance.now();
+    love.audio.resume();
+    if (!live()) return;
+    for (const t of Array.from(e.changedTouches)) {
+      if (finger === null) {
+        finger = t.identifier;
+        at = pos(t);
+        soft_keyboard.touched(...at);
+        pointer_move(...at, true);
+        pointer_down(...at, 0, true);
+      } else {
+        pointer_down(...at, 2, true);
+      }
+    }
+  }, { passive: false });
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    touched_at = performance.now();
+    const t = find(e);
+    if (!t) return;
+    at = pos(t);
+    if (live()) pointer_move(...at, true);
+  }, { passive: false });
+  const lift = (e: TouchEvent) => {
+    e.preventDefault();
+    touched_at = performance.now();
+    // (a finger's lift is what browsers take as the player's gesture: sound, full screen, the keyboard)
+    love.audio.resume();
+    if (e.type === 'touchend') fill_screen();
+    const t = find(e);
+    if (!t) return;
+    finger = null;
+    if (!live()) return;
+    const [x, y] = pos(t);
+    pointer_up(x, y, 0, true);
+    if (e.type === 'touchend') soft_keyboard.tapped(x, y);
+  };
+  canvas.addEventListener('touchend', lift, { passive: false });
+  canvas.addEventListener('touchcancel', lift, { passive: false });
+  // (Safari's pinch zoom ignores the viewport's user-scalable=no)
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('keydown', (e) => {
     if (input_state.blocked || !live()) return;
@@ -81,9 +139,8 @@ function wire_input() {
     const text = e.clipboardData?.getData('text') ?? '';
     love.system.setClipboardText(text);
   });
-  window.addEventListener('resize', () => {
-    if (fit_canvas() && G.window_prev) resize(canvas.width, canvas.height);
-  });
+  window.addEventListener('resize', refit);
+  window.visualViewport?.addEventListener('resize', refit);
 }
 
 /** G.STATE and G.STAGE changes, for the recording */
@@ -106,6 +163,7 @@ async function main() {
   loading_bar(0);
   await start_up((p) => loading_bar(p));
   name_profile();
+  set_up_screen();
   register_all();
   register_bug_report_funcs();
   wire_input();
@@ -133,7 +191,7 @@ async function main() {
       run,
       frame: 0,
       step(n: number, dt = 1 / 60) {
-        for (let i = 0; i < n; i++) { this.frame++; tick(dt); record_state(); }
+        for (let i = 0; i < n; i++) { this.frame++; tick(dt); soft_keyboard.update(); record_state(); }
         game_draw();
         recorder.after_draw(canvas);
         return this.frame;
@@ -149,7 +207,9 @@ async function main() {
     const dt = now - last;
     last = now;
     try {
+      refit();
       tick(dt);
+      soft_keyboard.update();
       record_state();
       game_draw();
       recorder.after_draw(canvas);

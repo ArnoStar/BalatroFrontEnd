@@ -178,6 +178,16 @@ export function register_ui_funcs() {
   };
 
   F.paste_seed = (e: any) => {
+    // (a phone has no Ctrl+V to hand the page its clipboard: it is asked for, if the browser lets it)
+    if (G.CONTROLLER.HID.touch && navigator.clipboard?.readText) {
+      const paste = () => { if (!e.REMOVED) paste_seed(e); };
+      navigator.clipboard.readText().then((t) => { love.system.setClipboardText(t); paste(); }, paste);
+      return;
+    }
+    paste_seed(e);
+  };
+
+  const paste_seed = (e: any) => {
     G.CONTROLLER.text_input_hook = e.UIBox.get_UIE_by_ID('text_input').children[0].children[0];
     for (let i = 0; i < 8; i++) F.text_input_key({ key: 'right' });
     for (let i = 0; i < 8; i++) F.text_input_key({ key: 'backspace' });
