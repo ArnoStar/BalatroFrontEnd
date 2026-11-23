@@ -12,7 +12,8 @@
 // moves while a menu has paused the game. The engine is deterministic: the copy goes exactly the way
 // the run went. The viewer only watches: their own clicks and keys don't reach the run, and when it
 // ends (or they stop it) they watch it again or go to the main menu; someone else's run isn't theirs
-// to play on.
+// to play on. The seek bar goes to any action: the API makes a new copy with the actions before it
+// played (any point, back or forward), and the watch goes on from there.
 import { G } from '@/shared/lib/engine';
 import { api, ApiError, type WatchView } from '@/shared/api';
 import { recorder } from '@/shared/lib/recorder';
@@ -201,7 +202,7 @@ function same_action(want: Action, got: any): boolean {
 }
 
 class Watch {
-  next = 0;
+  next: number;
   paused = false;
   stopped = false;
   private stepping = false;
@@ -209,10 +210,11 @@ class Watch {
   private quiet_since = 0;
   private started_at = 0;
   private waiting_start = false;
-  private speed_before = G.SETTINGS.GAMESPEED;
   private off: () => void;
 
-  constructor(readonly view: WatchView) {
+  /** `speed_before`: the viewer's own game speed, back when the watch ends */
+  constructor(readonly view: WatchView, private speed_before: number) {
+    this.next = view.start ?? 0;
     this.off = recorder.on((e) => {
       if (e.k !== 'action' || e.phase !== 'start' || !this.waiting_start) return;
       this.waiting_start = false;
@@ -346,6 +348,15 @@ class Watch {
     return G.SETTINGS.GAMESPEED;
   };
 
+  /** another copy takes over (a seek): this one stops where it is, quietly */
+  retire() {
+    this.stopped = true;
+    this.off();
+  }
+
+  /** an action's call to the API is on its way: wait for it before leaving the run (opening another stops its animations) */
+  busy = () => run.busy;
+
   finish(message: string) {
     if (this.stopped) return;
     this.stopped = true;
@@ -380,11 +391,48 @@ export async function start_watch_if_asked() {
   const id = new URLSearchParams(location.search).get('watch');
   if (!id) return;
   let current: Watch | null = null;
+  let going = false; // a seek on its way
+  const speed = G.SETTINGS.GAMESPEED;
+  const open = (view: WatchView, paused: boolean) => {
+    current = new Watch(view, speed);
+    current.paused = paused;
+    pointer_trace.enabled = false; // (the viewer's pointer isn't the player's)
+    input_state.replaying = true; // (nor are their clicks and keys: they watch)
+    ghost.show();
+    G.FUNCS.start_run(null, { open_id: view.game.id });
+    requestAnimationFrame(current.tick);
+  };
+  /** the run from action `at` on: a new copy there, opened in place of this one */
+  const seek = async (at: number) => {
+    const old = current;
+    if (!old || going) return;
+    going = true;
+    const ended = old.stopped;
+    const paused = !ended && old.paused;
+    old.retire();
+    ghost.hide();
+    hud.message(`Going to action ${at}…`);
+    try {
+      for (let i = 0; i < 100 && old.busy(); i++) await new Promise((r) => setTimeout(r, 50));
+      const view = await api.watch(id, at);
+      if (ended) {
+        hud.reopen(paused);
+        hud.speed(G.SETTINGS.GAMESPEED);
+      }
+      hud.message('');
+      open(view, paused);
+    } catch (err) {
+      hud.message(`Couldn't go to action ${at}: ${(err as any)?.message ?? err}`);
+    } finally {
+      going = false;
+    }
+  };
   hud.show({
     pause: () => current?.toggle_pause() ?? false,
     step: () => current?.step(),
     speed: () => current?.change_speed() ?? G.SETTINGS.GAMESPEED,
     stop: () => current?.finish('Stopped.'),
+    seek: (at) => void seek(at),
   });
   hud.message('Loading the run…');
   try {
@@ -393,12 +441,7 @@ export async function start_watch_if_asked() {
     hud.title(view.owner_name ? `Watching ${view.owner_name}'s run` : 'Watching a run');
     hud.speed(G.SETTINGS.GAMESPEED);
     hud.message('');
-    current = new Watch(view);
-    pointer_trace.enabled = false; // (the viewer's pointer isn't the player's)
-    input_state.replaying = true; // (nor are their clicks and keys: they watch)
-    ghost.show();
-    G.FUNCS.start_run(null, { open_id: view.game.id });
-    requestAnimationFrame(current.tick);
+    open(view, false);
   } catch (err) {
     hud.message(err instanceof ApiError && err.code === 'game_not_found'
       ? "This run can't be watched: it isn't finished yet, or its player's profile is private."

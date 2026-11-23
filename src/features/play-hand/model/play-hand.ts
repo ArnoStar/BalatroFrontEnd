@@ -17,7 +17,8 @@ const by_x = (cards: any[]) => [...cards].sort((a, b) => a.T.x - b.T.x);
 
 /** CardArea:parse_highlighted, with the API's answer */
 function preview_hand(area: any) {
-  if (area !== G.hand || !run.id) return;
+  // (not while the run is being taken down: its cards leave the hand after the HUD is gone)
+  if (area !== G.hand || !run.id || G.HUD?.REMOVED) return;
   const selected = ids_of(area.highlighted);
   const seq = ++run.preview_seq;
   if (selected.length === 0) {

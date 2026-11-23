@@ -422,12 +422,25 @@ The game plays with a finger, as the game's own touch mode (`HID.touch` in
   at the top of the screen focused while a box is selected and sends what is
   typed to the game as keys. Paste Seed asks the browser for the clipboard.
 
+- **The menu button** (top left, touch screens only) is the Esc key: the
+  Options menu, or back out of a menu.
+
 `app/mobile/screen.ts`: a touch screen goes full screen in landscape at the
 first touch (where the browser allows it: not on iPhones, whose players turn
-the phone themselves), a phone held upright is asked to turn ("Play like this"
-keeps it), a phone's card texts are the game's mobile size (`G.F_MOBILE_UI`)
-and a 3x screen draws at 2x. Touches are recorded with `touch: true` in bug
+the phone themselves, or add the game to their home screen to play it full
+screen), a phone held upright is asked to turn ("Play like this" keeps it).
+On a phone (`G.F_MOBILE_UI`) card texts are the game's mobile size and the
+room fills the screen's height (smaller margins, `init_window`); a 3x screen
+draws at 2x. Touches are recorded with `touch: true` in bug
 reports, and replayed as touches.
+
+## Watching a run
+
+`/play/?watch=<id>` (`features/watch-run`) plays a run again on a copy the API
+makes, with the player's pointer. The bar over it pauses, steps, changes the
+speed, and seeks: let go of the seek bar at an action and the API makes a
+copy with the actions before it played (`POST /games/{id}/watch?at=<n>`), on
+which the watch goes on.
 
 ## How it works
 

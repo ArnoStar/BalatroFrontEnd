@@ -96,7 +96,8 @@ export function pointer_up(x: number, y: number, button: number, touch = false) 
 export function key_down(key: string) {
   if (input_state.blocked || !G.CONTROLLER) return;
   recorder.record('input', { type: 'key', key, f: frame() });
-  G.CONTROLLER.set_HID_flags('mouse');
+  // (a key of a touch screen, its keyboard or the Esc button, leaves the finger the pointer)
+  if (!G.CONTROLLER.HID.touch) G.CONTROLLER.set_HID_flags('mouse');
   // typed characters keep their case and symbols
   G.CONTROLLER.key_press(G.CONTROLLER.text_input_hook && key.length === 1 ? key : love_key(key));
 }

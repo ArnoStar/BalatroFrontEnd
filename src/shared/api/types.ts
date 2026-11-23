@@ -220,6 +220,8 @@ export interface WatchView {
   game: GameView;
   /** `pointer`: the player's pointer before the action, as the game sent it (shared/lib/pointer-trace); null for older runs */
   steps: { version: number; action: Record<string, any>; pointer?: { v: 1; e: (number | string)[][] } | null }[];
+  /** the step the copy is at (its first `start` steps played): the next to play (older APIs: none, 0) */
+  start?: number;
 }
 
 // ------------------------------------------------------------------ multiplayer (/matches)

@@ -19,7 +19,7 @@ import { start_presence } from '@/features/social-presence';
 import { open_seed_link_if_asked } from '@/features/seed-link';
 import { open_match_link_if_asked } from '@/features/multiplayer';
 import { start_notifications } from '@/features/notifications';
-import { fill_screen, pixel_ratio, set_up_screen } from './mobile/screen';
+import { fill_screen, phone, pixel_ratio, set_up_screen } from './mobile/screen';
 
 const canvas = document.getElementById('screen') as HTMLCanvasElement;
 
@@ -160,6 +160,7 @@ async function main() {
   fit_canvas();
   initLove(canvas, `${import.meta.env.BASE_URL}resources/sounds`);
   set_globals();
+  G.F_MOBILE_UI = phone; // (before the window is made: a phone's room fills its height)
   loading_bar(0);
   await start_up((p) => loading_bar(p));
   name_profile();
