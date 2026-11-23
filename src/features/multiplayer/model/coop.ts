@@ -265,6 +265,18 @@ function lock_hand() {
   }
 }
 
+/** the shop's Next Round, pressable again whenever the player's vote to leave isn't counted (it was
+ *  refused, or, by coop rules 1 and 2, a pack opened in the shop dropped the votes) */
+function vote_again() {
+  const c = run.view?.coop;
+  const seat = my_seat();
+  if (!c || seat === null || run.busy || timeline_playing() || G.STATE !== G.STATES.SHOP || c.shop_votes.includes(seat)) return;
+  const b = G.shop?.get_UIE_by_ID?.('next_round_button');
+  if (!b || (b.config.button && !b.disable_button)) return;
+  b.config.button = 'toggle_shop';
+  b.disable_button = false;
+}
+
 /** this player's selection, sent on their turn; the other one's, shown on theirs */
 function selections(m: MatchView) {
   if (!m.coop || coop.replaying || run.busy || timeline_playing()) return;
@@ -304,6 +316,7 @@ export function register_coop_funcs() {
     const m = mp.match;
     if (!in_coop_run(m)) return;
     lock_hand();
+    vote_again();
     selections(m);
   }, 250);
   // the blind's choice is the turn's player's: the other one is told whose turn it is
