@@ -1,7 +1,9 @@
 // The player's input, as love.mousepressed/love.keypressed... (main.lua): the
 // page's listeners (app) and a bug report's replay (features/bug-report) both
 // come through here, and every input is recorded (shared/lib/recorder) in
-// game units, so a replay hits the same things on any screen size.
+// game units, so a replay hits the same things on any screen size. A finger
+// is the game's touch pointer (`touch`: HID 'touch', as love.mousepressed's
+// istouch): it only hovers while it's down, and holding it shows tooltips.
 import { G } from '@/shared/lib/engine';
 import { love } from '@/shared/lib/love';
 import { recorder } from '@/shared/lib/recorder';
@@ -52,24 +54,26 @@ function record(type: string, x: number, y: number, extra: Record<string, unknow
   if (g) recorder.record('input', { type, x: g[0], y: g[1], f: frame(), ...extra });
 }
 
-export function pointer_move(x: number, y: number) {
+const hid = (touch: boolean) => (touch ? 'touch' : 'mouse');
+
+export function pointer_move(x: number, y: number, touch = false) {
   if (input_state.blocked) return;
   love.mouse.x = x;
   love.mouse.y = y;
-  G.CONTROLLER?.set_HID_flags('mouse');
+  G.CONTROLLER?.set_HID_flags(hid(touch));
   const t = recorder.now();
   if (held || t - last_move >= MOVE_EVERY) {
     last_move = t;
-    record('move', x, y);
+    record('move', x, y, touch ? { touch } : {});
   }
 }
 
-export function pointer_down(x: number, y: number, button: number) {
+export function pointer_down(x: number, y: number, button: number, touch = false) {
   if (input_state.blocked || !G.CONTROLLER) return;
   love.mouse.x = x;
   love.mouse.y = y;
-  G.CONTROLLER.set_HID_flags('mouse');
-  record('down', x, y, { button });
+  G.CONTROLLER.set_HID_flags(hid(touch));
+  record('down', x, y, touch ? { button, touch } : { button });
   if (button === 0) {
     held = true;
     G.CONTROLLER.queue_L_cursor_press(x, y);
@@ -77,10 +81,14 @@ export function pointer_down(x: number, y: number, button: number) {
   if (button === 2) G.CONTROLLER.queue_R_cursor_press(x, y);
 }
 
-export function pointer_up(x: number, y: number, button: number) {
+export function pointer_up(x: number, y: number, button: number, touch = false) {
   if (button === 0) held = false;
   if (input_state.blocked || !G.CONTROLLER) return;
-  record('up', x, y, { button });
+  if (touch) {
+    love.mouse.x = x;
+    love.mouse.y = y;
+  }
+  record('up', x, y, touch ? { button, touch } : { button });
   if (button === 0) G.CONTROLLER.L_cursor_release(x, y);
 }
 
@@ -88,7 +96,8 @@ export function pointer_up(x: number, y: number, button: number) {
 export function key_down(key: string) {
   if (input_state.blocked || !G.CONTROLLER) return;
   recorder.record('input', { type: 'key', key, f: frame() });
-  G.CONTROLLER.set_HID_flags('mouse');
+  // (a key of a touch screen, its keyboard or the Esc button, leaves the finger the pointer)
+  if (!G.CONTROLLER.HID.touch) G.CONTROLLER.set_HID_flags('mouse');
   // typed characters keep their case and symbols
   G.CONTROLLER.key_press(G.CONTROLLER.text_input_hook && key.length === 1 ? key : love_key(key));
 }

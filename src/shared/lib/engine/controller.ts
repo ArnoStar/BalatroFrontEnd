@@ -1,5 +1,5 @@
 // engine/controller.lua: how the cursor and keyboard reach game objects
-// (hover, click, drag, release). Mouse and keyboard only: the gamepad paths
+// (hover, click, drag, release). Mouse, touch and keyboard: the gamepad paths
 // of the game (focus navigation, axis cursor) are not used in the browser.
 import { G } from './globals';
 import { love } from '../love';
@@ -45,6 +45,8 @@ export class Controller {
   frame_buttonpress = false;
   overlay_timer = 0;
   L_cursor_queue: { x: number; y: number } | null = null;
+  /** a touch's release that came before the game took its press (a quick tap, both in one frame): taken next frame */
+  L_release_queue: { x: number; y: number } | null = null;
   COYOTE_FOCUS: any = null;
   lock_input?: boolean;
   focus_cursor_stack: any;
@@ -111,6 +113,12 @@ export class Controller {
     this.released_keys = EMPTY(this.released_keys);
     this.pressed_buttons = EMPTY(this.pressed_buttons);
     this.released_buttons = EMPTY(this.released_buttons);
+
+    if (this.L_release_queue && !this.L_cursor_queue) {
+      const r = this.L_release_queue;
+      this.L_release_queue = null;
+      this.L_cursor_release(r.x, r.y);
+    }
 
     this.get_cursor_collision(G.CURSOR.T);
     this.update_focus();
@@ -188,6 +196,17 @@ export class Controller {
       if (this.hovering.prev_target !== this.hovering.target) {
         if (this.hovering.target !== this.dragging.target && !this.HID.touch) {
           this.hovering.target.hover();
+        } else if (this.HID.touch) {
+          // (a finger shows what it holds a moment later: a tap doesn't flash every tooltip)
+          const id = this.hovering.target.ID;
+          G.E_MANAGER.add_event(new Event({
+            trigger: 'after', blockable: false, blocking: false, delay: G.MIN_HOVER_TIME,
+            func: () => {
+              if (this.hovering.target && id === this.hovering.target.ID) this.hovering.target.hover();
+              return true;
+            },
+          }));
+          if (this.hovering.prev_target) this.hovering.prev_target.stop_hover();
         }
         if (this.hovering.prev_target) this.hovering.prev_target.stop_hover();
       }
@@ -395,6 +414,10 @@ export class Controller {
   L_cursor_release(x?: number, y?: number) {
     x = x ?? this.cursor_position.x;
     y = y ?? this.cursor_position.y;
+    if (this.HID.touch && this.L_cursor_queue) {
+      this.L_release_queue = { x, y };
+      return;
+    }
     if ((this.locked && (!G.SETTINGS.paused || G.screenwipe)) || this.locks.frame) return;
     this.cursor_up.T = { x: x / (G.TILESCALE * G.TILESIZE), y: y / (G.TILESCALE * G.TILESIZE) };
     this.cursor_up.time = G.TIMERS.TOTAL;

@@ -38,6 +38,16 @@ const CSS = `
 .br-hud__warn { color: #fda200; overflow-wrap: anywhere; }
 .br-hud .br-btn { min-width: 0; padding: 4px 12px; margin-left: auto; }
 .br-hud .br-btn + .br-btn { margin-left: 0; }
+/* a phone on its side: the whole dialog on its short screen (16px texts: Safari zooms into smaller fields) */
+@media (max-height: 500px) {
+  .br-root { padding: 8px; font-size: 17px; }
+  .br-panel { width: min(680px, calc(100vw - 16px)); gap: 6px; padding: 10px 14px; border-radius: 10px; }
+  .br-panel h2 { font-size: 24px; }
+  .br-panel textarea { min-height: 64px; padding: 6px 8px; font-size: 16px; }
+  .br-shot { max-height: 20vh; }
+  .br-what { font-size: 15px; }
+  .br-btn { min-width: 84px; padding: 6px 14px; }
+}
 `;
 
 let added = false;

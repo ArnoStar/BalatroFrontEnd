@@ -7,8 +7,9 @@ import { Moveable } from './moveable';
 import { remove_all } from './util';
 
 export function init_window() {
-  G.ROOM_PADDING_H = 0.7;
-  G.ROOM_PADDING_W = 1;
+  // (a phone, G.F_MOBILE_UI: its short screen is the room's height, nearly to the edges)
+  G.ROOM_PADDING_H = G.F_MOBILE_UI ? 0.3 : 0.7;
+  G.ROOM_PADDING_W = G.F_MOBILE_UI ? 0.3 : 1;
   G.WINDOWTRANS = { x: 0, y: 0, w: G.TILE_W + 2 * G.ROOM_PADDING_W, h: G.TILE_H + 2 * G.ROOM_PADDING_H };
   G.window_prev = {
     orig_scale: G.TILESCALE,

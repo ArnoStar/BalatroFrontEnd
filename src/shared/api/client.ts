@@ -136,8 +136,8 @@ export const api = {
     request<ActionResult>('POST', `/games/${id}/creative`, { ...change, expected_version: expected_version ?? null }),
   /** the player's settings and progress */
   me: () => request<MeView>('GET', '/players/me'),
-  /** watch a run again: a copy at its start and the player's actions */
-  watch: (id: string) => request<WatchView>('POST', `/games/${id}/watch`),
+  /** watch a run again: a copy at its start (or after its first `at` actions) and the player's actions */
+  watch: (id: string, at = 0) => request<WatchView>('POST', `/games/${id}/watch${at > 0 ? `?at=${at}` : ''}`),
 };
 
 /** content mods: the registry (browse, publish, install), packages by hash */
