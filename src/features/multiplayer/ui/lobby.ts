@@ -5,7 +5,7 @@
 import { G, DynaText, UIBox } from '@/shared/lib/engine';
 import { localize } from '@/shared/lib/localization';
 import { UIBox_button, create_UIBox_generic_options, create_option_cycle, create_text_input } from '@/shared/ui';
-import { matches, social_api, type FriendView, type MatchView } from '@/shared/api';
+import { matches, portal_base, social_api, type FriendView, type MatchView } from '@/shared/api';
 import { mp, on_match, problem, refresh, set_match } from '../model/match';
 import { tr } from './text';
 
@@ -146,6 +146,8 @@ function menu_contents() {
       UIBox_button({ button: 'mp_join', label: [tr('join')], minw: 2, minh: 0.7, scale: 0.4, colour: G.C.BLUE, col: true }),
       { n: G.UIT.C, config: { minw: 0.6 }, nodes: [] },
       UIBox_button({ button: 'mp_stats', label: [tr('stats_history')], minw: 3.4, minh: 0.7, scale: 0.4, colour: G.C.GREEN, col: true }),
+      { n: G.UIT.C, config: { minw: 0.2 }, nodes: [] },
+      UIBox_button({ button: 'mp_leaderboards', label: [tr('leaderboards')], minw: 2.6, minh: 0.7, scale: 0.4, colour: G.C.ORANGE, col: true }),
     ] },
     status_row(),
   ];
@@ -355,6 +357,8 @@ export async function join_match(code: string) {
 export function register_lobby_funcs() {
   const F = G.FUNCS;
   F.mp_close = () => close_lobby();
+  // (everyone's matches: the portal's multiplayer leaderboards and statistics, in a new tab)
+  F.mp_leaderboards = () => { window.open(`${portal_base()}/leaderboards?mode=multiplayer`, '_blank', 'noopener'); };
   F.mp_create_pvp = () => attempt(async () => { set_match(await new_match('pvp')); });
   F.mp_create_coop = () => attempt(async () => { set_match(await new_match('coop')); });
   F.mp_kick = (e: any) => {
