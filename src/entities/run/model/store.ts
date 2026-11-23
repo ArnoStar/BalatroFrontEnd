@@ -1,6 +1,6 @@
 // The run being played: the API's latest GameView and what the player is
 // doing with it (an action in flight, the hand preview).
-import type { Area, CardView, GameView, HandPreview, LegalAction, ActionType } from '@/shared/api';
+import type { Area, CardView, GameView, HandPreview, LegalAction, ActionType, PlayerAction } from '@/shared/api';
 
 export const run = {
   id: null as string | null,
@@ -27,7 +27,23 @@ export function clear_run() {
 }
 
 /** the legal actions of a type (for a card) */
+/**
+ * An action someone else made (a coop partner's), being played here through
+ * the game's own functions: legal while they run, whatever this player's own
+ * legal actions are (their pack, their half of the jokers).
+ */
+export const spectated = { action: null as PlayerAction | null };
+
+function spectated_legal(type: ActionType, card?: number | null): LegalAction[] {
+  const a = spectated.action as any;
+  if (!a || a.type !== type || (card !== undefined && card !== null && a.card !== card)) return [];
+  const n = Array.isArray(a.targets) && a.targets.length ? a.targets.length : null;
+  return [{ type, card: a.card ?? null, area: null, use: a.use ?? null, mode: a.mode ?? null, min_cards: null, max_cards: null,
+    min_targets: n, max_targets: n, cost: null, value: null }];
+}
+
 export function legal(type: ActionType, card?: number | null): LegalAction[] {
+  if (spectated.action) return spectated_legal(type, card);
   const v = run.view;
   if (!v) return [];
   return v.actions.filter((a) => a.type === type && (card === undefined || card === null || a.card === card));

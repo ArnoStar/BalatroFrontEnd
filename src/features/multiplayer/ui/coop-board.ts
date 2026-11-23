@@ -1,14 +1,16 @@
 // Coop in the run, drawn with the game's own UI: the board right of the blind
-// select (whose turn it is, both players' jokers, decks and numbers, the shop's
-// leaving, emotes), a name tag on the other player's jokers (they count for
-// both, but only their owner sells and moves them), both players' decks in the
-// deck view, and the match's end on the game over screen (each player's
-// numbers, a rematch).
-import { G, UIBox, play_sound, number_format } from '@/shared/lib/engine';
+// select (whose turn it is, both players' jokers and numbers, the shop's
+// leaving, emotes), the joker row split in the players' halves side by side
+// (each with its owner's name and slots: all count, but only their owner sells
+// and moves them), both players' decks in the deck view (mode_rules 1: a deck
+// each), and the match's end on the game over screen (each player's numbers, a
+// rematch).
+import { G, UIBox, Event, play_sound, number_format } from '@/shared/lib/engine';
 import { UIBox_button, attention_text, create_UIBox_generic_options } from '@/shared/ui';
 import { localize } from '@/shared/lib/localization';
 import { matches, type CoopDeckView, type CoopDecksView, type CoopSeatView, type MatchView, type Score } from '@/shared/api';
-import { run, deck_card } from '@/entities/run';
+import { run, deck_card, timeline_playing } from '@/entities/run';
+import type { CardGroups } from '@/entities/card';
 import { mp, on_match, refresh } from '../model/match';
 import { in_coop_run, my_seat, my_turn } from '../model/coop';
 import { emote_button, close_emotes } from './emotes';
@@ -25,8 +27,8 @@ function numbers(s: CoopSeatView | undefined): string {
 }
 
 let board: any = null;
-let last_turn: number | null = null;
-const tags = new Map<any, any>();
+let last_phase: string | null = null;
+let shown_turn: number | null = null;
 
 function partner(m: MatchView): string {
   return m.players.find((p) => !p.you)?.name ?? tr('partner');
@@ -89,12 +91,15 @@ function update(m: MatchView) {
   const name = partner(m);
   const mine_jokers = (run.view?.jokers ?? []).filter((j) => j.owner === seat).length;
   const theirs_jokers = (run.view?.jokers ?? []).filter((j) => j.owner === 1 - seat).length;
-  ui.turn = my_turn() ? tr('your_turn') : tr('their_turn', { name });
+  // (the turn passes on screen with the play's `turn` event, once its hand is scored)
+  if (shown_turn === null || !timeline_playing()) shown_turn = v.turn;
+  ui.turn = shown_turn === seat ? tr('your_turn') : tr('their_turn', { name });
   ui.you = m.players[m.seat]?.name ?? tr('you');
   ui.them = name;
-  const deck = (s: number) => v.seats[s]?.deck ?? 0;
-  ui.you_info = `${tr('jokers')} ${mine_jokers}/${v.joker_slots[seat] ?? 5}  ${tr('deck')} ${deck(seat)}`;
-  ui.them_info = `${tr('jokers')} ${theirs_jokers}/${v.joker_slots[1 - seat] ?? 5}  ${tr('deck')} ${deck(1 - seat)}`;
+  // (one deck for both: the deck pile has its count)
+  const deck = (s: number) => (v.shared_deck ? '' : `  ${tr('deck')} ${v.seats[s]?.deck ?? 0}`);
+  ui.you_info = `${tr('jokers')} ${mine_jokers}/${v.joker_slots[seat] ?? 5}${deck(seat)}`;
+  ui.them_info = `${tr('jokers')} ${theirs_jokers}/${v.joker_slots[1 - seat] ?? 5}${deck(1 - seat)}`;
   ui.you_nums = numbers(v.seats[seat]);
   ui.them_nums = numbers(v.seats[1 - seat]);
   let status = '';
@@ -107,40 +112,97 @@ function update(m: MatchView) {
     status = tr('watching', { name });
   }
   [ui.status_1 = '', ui.status_2 = ''] = wrap(status, 22);
-  if (last_turn !== null && last_turn !== v.turn && board && run.view?.phase === 'playing') {
-    attention_text({ text: ui.turn, scale: 0.9, hold: 1.4, major: G.play, align: 'cm', offset: { x: 0, y: -1.5 }, colour: G.C.WHITE });
-    play_sound('timpani', 1, 0.5);
-  }
-  last_turn = v.turn;
+  // a round starts: whose turn it is (later turns are the play's own `turn` event: announce_turn)
+  const phase = run.view?.phase ?? null;
+  if (board && phase === 'playing' && last_phase !== null && last_phase !== 'playing' && last_phase !== 'pack') announce_turn(v.turn);
+  last_phase = phase;
 }
 
-/** a name tag under each of the other player's jokers */
-function update_tags(m: MatchView) {
-  const seat = m.seat;
+/**
+ * The turn passes: the game's big announcement (the letters pop in over a
+ * burst of the player's colour, as a planet's level up). On this player's
+ * turn the room shakes a little and the hand ripples, card by card.
+ */
+function announce_turn(seat: number) {
+  const m = mp.match;
+  if (!m || !board) return;
+  const mine = seat === m.seat;
   const name = partner(m);
-  const theirs = new Set<any>();
-  for (const c of G.jokers?.cards ?? []) {
-    const owner = run.view?.jokers.find((j) => j.id === c.api_id)?.owner;
-    if (owner === undefined || owner === null || owner === seat) continue;
-    theirs.add(c);
-    if (!tags.has(c)) {
-      tags.set(c, new UIBox({
-        definition: { n: G.UIT.ROOT, config: { align: 'cm', colour: G.C.CLEAR }, nodes: [
-          { n: G.UIT.R, config: { align: 'cm', r: 0.08, padding: 0.04, colour: G.C.GREEN }, nodes: [
-            { n: G.UIT.T, config: { text: name, scale: 0.24, colour: G.C.UI.TEXT_LIGHT, shadow: true } },
-          ] },
-        ] },
-        config: { major: c, align: 'bmi', offset: { x: 0, y: 0.05 }, bond: 'Strong' },
-      }));
-    }
-  }
-  for (const [c, tag] of [...tags]) {
-    if (!theirs.has(c) || c.REMOVED) {
-      tag.remove();
-      tags.delete(c);
-    }
+  shown_turn = seat;
+  if (mine) {
+    attention_text({ text: tr('your_turn_big'), scale: 1.3, hold: 1.5, major: G.play, align: 'cm', offset: { x: 0, y: -1.3 },
+      backdrop_colour: G.C.BLUE, backdrop_scale: 1.4, noisy: true, rotate: 1 });
+    play_sound('timpani', 1.1, 0.7);
+    play_sound('whoosh2', 1.3, 0.4);
+    G.ROOM.jiggle = (G.ROOM.jiggle ?? 0) + 2;
+    (G.hand?.cards ?? []).forEach((c: any, i: number) => {
+      G.E_MANAGER.add_event(new Event({ trigger: 'after', delay: 0.05 * (i + 1), blockable: false, blocking: false, func: () => {
+        c.juice_up(0.25, 0.2);
+        if (i % 2 === 0) play_sound('paper1', 0.9 + 0.05 * i, 0.3);
+        return true;
+      } }));
+    });
+  } else {
+    attention_text({ text: tr('their_turn', { name }), scale: 0.8, hold: 1.2, major: G.play, align: 'cm', offset: { x: 0, y: -1.3 },
+      backdrop_colour: G.C.GREEN, backdrop_scale: 1 });
+    play_sound('whoosh', 0.9, 0.4);
   }
 }
+
+/** the button the other player waits on: it wiggles now and then */
+let waiting_since = 0;
+function nudge_waiting() {
+  const m = mp.match;
+  const v = run.view?.coop;
+  const seat = my_seat();
+  if (!board || !m || m.status !== 'playing' || !v || seat === null || run.busy || G.screenwipe || G.OVERLAY_MENU) {
+    waiting_since = 0;
+    return;
+  }
+  let id: string | null = null;
+  const phase = run.view?.phase;
+  if (phase === 'shop' && v.shop_votes.includes(1 - seat) && !v.shop_votes.includes(seat)) id = 'next_round_button';
+  else if (phase === 'blind_select' && my_turn()) id = 'select_blind';
+  else if (phase === 'playing' && my_turn() && G.STATE === G.STATES.SELECTING_HAND) id = 'play_button';
+  if (!id) { waiting_since = 0; return; }
+  const now = G.TIMERS.REAL;
+  if (!waiting_since) waiting_since = now;
+  if (now - waiting_since < 3) return; // (a moment to think first)
+  const node = find_ui((n) => (id === 'select_blind' ? n.config?.button === 'select_blind' : n.config?.id === id));
+  node?.juice_up(0.12, 0.04);
+}
+
+/** the first visible UI element that `test` takes */
+function find_ui(test: (n: any) => boolean): any {
+  const find = (n: any): any => {
+    if (!n || n.states?.visible === false) return null;
+    if (test(n)) return n;
+    for (const c of Object.values(n.children ?? {})) {
+      const r = find(c);
+      if (r) return r;
+    }
+    return null;
+  };
+  for (const box of [G.blind_select, G.shop, G.buttons, ...(G.I?.UIBOX ?? [])]) {
+    const n = box?.UIRoot && find(box.UIRoot);
+    if (n) return n;
+  }
+  return null;
+}
+
+/** the joker row in the players' halves: seat 0's on the left (the jokers count from left to right) */
+const halves: CardGroups = {
+  of: (card: any) => run.view?.jokers.find((j) => j.id === card.api_id)?.owner,
+  info: () => {
+    const m = mp.match;
+    const v = run.view?.coop;
+    return [0, 1].map((seat) => ({
+      label: m?.players[seat]?.name ?? '',
+      colour: seat === m?.seat ? G.C.BLUE : G.C.GREEN,
+      limit: v?.joker_slots[seat] ?? 5,
+    }));
+  },
+};
 
 let ended = '';
 
@@ -162,18 +224,18 @@ function show_end(m: MatchView) {
 function remove_all() {
   board?.remove();
   board = null;
-  for (const tag of tags.values()) tag.remove();
-  tags.clear();
-  last_turn = null;
+  last_phase = null;
+  shown_turn = null;
 }
 
 function render(m: MatchView | null = mp.match) {
   if (!in_coop_run(m) || !run.view?.coop || !G.consumeables || !G.jokers) {
-    if (board || tags.size) remove_all();
+    if (board) remove_all();
+    if (G.jokers?.config?.groups === halves) G.jokers.set_groups(null);
     return;
   }
   update(m);
-  update_tags(m);
+  G.jokers.set_groups(halves);
   show_end(m);
   if (!board || board.REMOVED) {
     board = new UIBox({ definition: definition(), config: { major: G.ROOM_ATTACH, align: 'cri', offset: { x: -0.05, y: -0.7 }, bond: 'Weak' } });
@@ -231,6 +293,9 @@ function game_over_rows(): any[] {
 export function start_coop_board() {
   on_match((m) => render(m));
   setInterval(() => render(), 400);
+  setInterval(nudge_waiting, 1400);
+  // (the timeline's `turn` event: the turn passes after a hand)
+  G.FUNCS.coop_turn = (seat: number) => { if (in_coop_run()) announce_turn(seat); };
   G.FUNCS.coop_leave_ask = () => {
     G.SETTINGS.paused = true;
     G.FUNCS.overlay_menu({ definition: leave_definition() });
@@ -242,10 +307,14 @@ export function start_coop_board() {
     if (!m || m.status !== 'playing') return;
     void matches.leave(m.id).then(() => refresh(), () => refresh()).then(() => G.FUNCS.go_to_menu());
   };
-  // the deck view: the player's own deck (whoever's turn it is), and a tab with the other player's
+  // the deck view: one deck for both, or (mode_rules 1) the player's own deck, whoever's turn it is, and a tab
+  // with the other player's
   const deck_info = G.FUNCS.deck_info;
   G.FUNCS.deck_info = (...args: any[]) => {
-    if (my_seat() === null || !run.id) return deck_info(...args);
+    if (my_seat() === null || !run.id || run.view?.coop?.shared_deck) {
+      decks = null;
+      return deck_info(...args);
+    }
     void matches.coop_decks(run.id).then((d) => { decks = d; }, () => { decks = null; }).then(() => deck_info(...args));
   };
   G.UIDEF.deck_cards = () => {

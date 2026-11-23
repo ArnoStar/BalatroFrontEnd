@@ -1,7 +1,7 @@
 // The run: G.GAME (the client mirror of the API's GameView), the cards on
 // screen for the API's cards, and the pipeline that plays an action.
 export { init_game_object, get_starting_params } from './model/game-object';
-export { run, set_view, clear_run, legal, is_legal, area_views, find_view, VIEW_AREAS } from './model/store';
+export { run, set_view, clear_run, legal, is_legal, area_views, find_view, VIEW_AREAS, spectated } from './model/store';
 export { sync_game, sync_settings, reconcile_all, area_of } from './model/sync';
 export {
   card_by_id, register_card, forget_card, clear_cards, create_card, create_back_card, apply_card_view, card_for_view, reconcile_area,

@@ -11,7 +11,7 @@
 import { G, play_sound } from '@/shared/lib/engine';
 import { attention_text } from '@/shared/ui';
 import { api, matches, type CoopStep, type MatchView } from '@/shared/api';
-import { run, spectate, timeline_playing, finish_action, set_view, perform } from '@/entities/run';
+import { run, spectate, spectated, timeline_playing, finish_action, set_view, perform } from '@/entities/run';
 import { mp, on_match, set_poll_interval } from './match';
 import { tr } from '../ui/text';
 
@@ -41,6 +41,19 @@ export function my_seat(): number | null {
 export function my_turn(): boolean {
   const seat = my_seat();
   return seat !== null && run.view?.coop?.turn === seat;
+}
+
+/** whose the hand is to select: a pack's opener's while it is open, else the turn's player's */
+export function hand_seat(): number | null {
+  const c = run.view?.coop;
+  if (!c) return null;
+  return run.view?.phase === 'pack' && c.pack_seat !== null ? c.pack_seat : c.turn;
+}
+
+/** the hand is this player's to select (their turn, or their pack) */
+export function my_hand(): boolean {
+  const seat = my_seat();
+  return seat !== null && hand_seat() === seat;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -110,7 +123,9 @@ async function play_step(step: CoopStep): Promise<boolean> {
   const result = { game: step.game, events: step.events };
   const go = (fn: () => void) => {
     spectate.next = result;
-    fn();
+    // (their action, legal here while the game's function checks it: their pack, their jokers)
+    spectated.action = a as any;
+    try { fn(); } finally { spectated.action = null; }
   };
   switch (a.type) {
     case 'select_blind': case 'skip_blind': case 'cash_out': {
@@ -226,12 +241,22 @@ async function catch_up(m: MatchView) {
   }
 }
 
-/** the hand on the other player's turn: theirs to select (shown as they select it) */
+/** the hand on the other player's turn (or in their pack): theirs to select (shown as they select it) */
+const locked = new Set<any>();
+
 function lock_hand() {
-  const mine = my_turn();
+  const mine = my_hand();
   for (const c of G.hand?.cards ?? []) {
     c.states.click.can = mine;
     c.states.drag.can = mine;
+    if (!mine) locked.add(c);
+  }
+  // a card that left the hand clicks again (the deck's top card opens the deck view)
+  for (const c of [...locked]) {
+    if (mine || c.area !== G.hand) {
+      if (c.area !== G.hand) c.states.click.can = true;
+      locked.delete(c);
+    }
   }
   const seat = my_seat();
   for (const c of G.jokers?.cards ?? []) {
@@ -242,8 +267,10 @@ function lock_hand() {
 
 /** this player's selection, sent on their turn; the other one's, shown on theirs */
 function selections(m: MatchView) {
-  if (!m.coop || coop.replaying || run.busy || timeline_playing() || G.STATE !== G.STATES.SELECTING_HAND) return;
-  if (my_turn()) {
+  if (!m.coop || coop.replaying || run.busy || timeline_playing()) return;
+  const pack = run.view?.phase === 'pack' && run.view?.coop?.pack_seat !== null;
+  if (G.STATE !== G.STATES.SELECTING_HAND && !(pack && G.hand?.cards?.length)) return;
+  if (my_hand()) {
     const ids = (G.hand?.highlighted ?? []).map((c: any) => c.api_id).filter((x: any) => x !== undefined);
     const key = ids.join(',');
     if (key !== sent_selection) {

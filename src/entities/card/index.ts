@@ -8,7 +8,7 @@ export { Card, get_front_spriteinfo } from './model/card';
 export { Card_Character, speech_bubble } from './model/card-character';
 export type { CardParams } from './model/card';
 export { CardArea } from './model/card-area';
-export type { CardAreaConfig } from './model/card-area';
+export type { CardAreaConfig, CardGroups } from './model/card-area';
 export { generate_card_ui, generate_UIBox_ability_table, card_h_popup, get_type_colour, create_UIBox_detailed_tooltip } from './ui/card-ui';
 
 /** the card popups' callbacks (button_callbacks.lua) */

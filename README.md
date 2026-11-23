@@ -87,18 +87,26 @@ send the player's choice to the match and play it once both have chosen;
 Cash Out waits until the other player has finished the round. A run the
 match's timer moved on is opened again as it is now.
 
-In **Coop** both players play one run in turns and see the same table
-(`model/coop.ts`, `ui/coop-board.ts`). On your turn, the cards you select are
-sent to the match and your partner sees them selected; on theirs, your hand
-can't be selected and the blind's buttons say whose turn it is. Your partner's
-actions come back as the match's steps (each with what the game showed) and
-are played here through the game's own functions, with their animations
-(`entities/run`'s `spectate`: perform() takes the step's result instead of
-sending the action); one that can't be (a debug command, a screen that isn't
-there) loads the run again. After a hand, the hands switch (the timeline's
-`turn` event). The board shows whose turn it is, both players' jokers and
-decks and the shop's leaving (both must press Next Round); your partner's
-jokers have their name under them, and only their owner sells or moves them.
+In **Coop** both players play one run in turns, from one shared deck and
+hand, and see the same table (`model/coop.ts`, `ui/coop-board.ts`). On your
+turn (or in a pack you opened), the cards you select are sent to the match
+and your partner sees them selected; on theirs, your hand can't be selected
+and the blind's buttons say whose turn it is. Your partner's actions come back
+as the match's steps (each with what the game showed) and are played here
+through the game's own functions, with their animations (`entities/run`'s
+`spectate`: perform() takes the step's result instead of sending the action,
+and `spectated` makes the action legal here while the function checks it:
+their pack, their half of the jokers); one that can't be (a debug command, a
+screen that isn't there) loads the run again. After a hand the turn passes
+(the timeline's `turn` event): the game's big announcement, with the hand
+rippling on your turn; the button your partner waits on (Next Round, the
+blind's Select, Play Hand) wiggles now and then. The board shows whose turn
+it is, both players' jokers and the shop's leaving (both must press Next
+Round); the joker row is split in the two players' halves side by side
+(`CardArea.set_groups`), each with its owner's name and slots, and only their
+owner sells or moves them. Runs from before 2026-11-23 (`settings.mode_rules`
+1) had a deck each: the hands switch at the `turn` event and the deck view has
+both decks.
 
 Around the matches: emotes (a button on the boards and the end screens; the
 bubbles show over the menus too), a ticking sound in the last ten seconds of
@@ -113,8 +121,7 @@ other player's run to watch. The MULTIPLAYER menu's "Stats & history" has the
 player's PvP and coop numbers, rivals and partners, and their last matches
 with their runs to watch. The host can kick a player from the lobby, and a
 new match starts with the player's last deck, stake and timer. In coop the
-deck view shows your own deck (whoever's turn it is) and a tab with your
-partner's, and the board shows each player's hands and chips.
+board shows each player's hands and chips.
 
 A signed-in player invites friends from the lobby, or from the menu's friend
 list with a new PvP or Coop match (the social service's invites). The bell at the top right (`features/notifications`) shows what waits
