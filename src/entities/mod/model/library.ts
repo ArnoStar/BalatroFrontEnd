@@ -1,6 +1,8 @@
 // The player's installed mods, kept in the browser (IndexedDB: packages can be
 // large, with their images): each one's package, where it came from and
 // whether it is on. The enabled mods are those a new run is started with.
+// The mod editor (BalatroModEditor, at /editor/ on the same origin) writes here
+// too: its src/shared/api/library.ts is this file's twin (keep both in step).
 import type { ModChoice, ModPackage } from '@/shared/api';
 
 export interface InstalledMod {

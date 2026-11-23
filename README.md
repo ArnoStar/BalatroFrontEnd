@@ -137,7 +137,9 @@ are data, never code: the API checks them and the engine plays them.
   are on; a run with mods doesn't count for statistics or unlocks), its info
   with the cards it adds, Export (the package as a `.json` file), remove.
   Import a mod from a file (the button, or drop the file on the game); an
-  imported mod can be published.
+  imported mod can be published. **Make mods** opens the site's mod editor
+  (BalatroModEditor, at `/editor/`): a mod installed from there, on the same
+  origin, is in this library (`entities/mod/model/library.ts` has a twin there).
 - **Browse**: the community's mods (the API's `/mods`): search, sort, install,
   update. The engine's examples are there as official mods (Fruit Stand,
   Wild Rules, Creative Mode).
