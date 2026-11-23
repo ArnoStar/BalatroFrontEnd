@@ -5,7 +5,7 @@
 // search, sort, install, update.
 import { G, UIBox, DynaText } from '@/shared/lib/engine';
 import { create_UIBox_generic_options, create_option_cycle, create_text_input, UIBox_button } from '@/shared/ui';
-import { ApiError, mods as mods_api, type ModPackage, type ModSummaryView } from '@/shared/api';
+import { ApiError, mods as mods_api, portal_base, type ModPackage, type ModSummaryView } from '@/shared/api';
 import { Card, CardArea } from '@/entities/card';
 import {
   installed, installed_mod, remove_mod, save_mod, set_enabled, use_enabled_mods, use_mods, full_key, enabled_mods,
@@ -156,6 +156,7 @@ function installed_contents() {
     { n: G.UIT.R, config: { align: 'cm', padding: 0.1 }, nodes: [
       button(tr('import'), 'mods_import', G.C.BLUE, 3, undefined, 0.38),
       { n: G.UIT.C, config: { align: 'cm', padding: 0.1 }, nodes: [text(tr('import_hint'), 0.26, G.C.UI.TEXT_INACTIVE)] },
+      button(tr('make'), 'mods_editor', G.C.PURPLE, 2.6, undefined, 0.38),
     ] },
     ...lines(tr('enabled_note'), 90, 0.25, G.C.UI.TEXT_INACTIVE),
     ...status_rows(),
@@ -461,6 +462,8 @@ export function register_mods_funcs() {
   G.FUNCS.mods_install = (e: any) => { void install(e.config.ref_table.id); };
   G.FUNCS.mods_search = () => { st.browse_page = 0; void load_browse(); };
   G.FUNCS.mods_sort = (args: any) => { st.sort = SORTS[args.to_key - 1] ?? 'popular'; st.browse_page = 0; void load_browse(); };
+  // the site's mod editor (BalatroModEditor at /editor/): its mods installed from there show up here
+  G.FUNCS.mods_editor = () => { window.open(`${portal_base()}/editor/`, '_blank', 'noopener'); };
   G.FUNCS.mods_import = () => {
     const input = document.createElement('input');
     input.type = 'file';

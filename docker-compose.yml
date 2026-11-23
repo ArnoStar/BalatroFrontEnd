@@ -1,10 +1,13 @@
 # Balatro in the browser, everything together:
 #
 #   portal    the front door (BalatroPortal): the portal at /, and nginx passes
-#             /play/ to web, /casino/ to casino, /api/ to api and /identity/ to identity
+#             /play/ to web, /casino/ to casino, /editor/ to editor, /api/ to api and
+#             /identity/ to identity
 #   web       the game (this repository) at /play/
 #   casino    the casino (BalatroCasino) at /casino/: players stake their items
 #             (the item service's games), live
+#   editor    the mod editor (BalatroModEditor) at /editor/: players make content
+#             mods, test them in the engine (the api) and publish them
 #   api       the game API (BalatroWebAPI, with BalatroEngine), with its
 #             PostgreSQL (api-db): the runs and their statistics
 #   identity  accounts and sign-in (BalatroIndentityService), with its
@@ -26,7 +29,7 @@
 #
 # The game engine (BalatroEngine) is a library inside the api image, not a service.
 #
-# Lives in BalatroFrontEnd, next to ../BalatroPortal, ../BalatroCasino, ../BalatroWebAPI,
+# Lives in BalatroFrontEnd, next to ../BalatroPortal, ../BalatroCasino, ../BalatroModEditor, ../BalatroWebAPI,
 # ../BalatroIndentityService, ../BalatroNotificationService,
 # ../BalatroBugReportService, ../BalatroItemService, ../BalatroSocial and
 # ../balatro_src (a copy of the game):
@@ -90,6 +93,8 @@ services:
       SOCIAL_UPSTREAM: http://social:8000
       # (and without the casino, /casino/ answers 502)
       CASINO_UPSTREAM: http://casino:80
+      # (and without the mod editor, /editor/ answers 502)
+      EDITOR_UPSTREAM: http://editor:80
     ports:
       - "${WEB_PORT:-8087}:80"
     depends_on:
@@ -104,6 +109,12 @@ services:
   casino:
     build:
       context: ../BalatroCasino
+      network: host # as for the portal (npm)
+    restart: unless-stopped
+
+  editor:
+    build:
+      context: ../BalatroModEditor
       network: host # as for the portal (npm)
     restart: unless-stopped
 
