@@ -47,6 +47,12 @@ function update_selecting_hand(_dt: number) {
   if (!G.STATE_COMPLETE) G.STATE_COMPLETE = true;
 }
 
+/** the Voucher Tag's yep (Tag:apply_to_run, 'voucher_add'): the voucher area takes one more card */
+function widen_vouchers() {
+  if (G.shop_vouchers && !G.shop_vouchers.REMOVED) G.shop_vouchers.config.card_limit += 1;
+  return true;
+}
+
 function update_shop(_dt: number) {
   if (!G.STATE_COMPLETE) {
     stop_use();
@@ -63,8 +69,9 @@ function update_shop(_dt: number) {
             if (Math.abs(G.shop.T.y - G.shop.VT.y) < 3) {
               G.ROOM.jiggle += 3;
               play_sound('cardFan2');
-              // the tags that act once the shop is stocked (Voucher, Coupon)
-              if (run.view) react_tags(run.view.tags, undefined, ['voucher_add', 'shop_final_pass']);
+              // the tags that act once the shop is stocked (Voucher, Coupon); the Voucher Tag's voucher
+              // widens the voucher area, as Tag:apply_to_run adds one to its card_limit (its card comes with the view)
+              if (run.view) react_tags(run.view.tags, (t) => (t.name === 'Voucher Tag' ? widen_vouchers : undefined), ['voucher_add', 'shop_final_pass']);
               if (!shop_exists && G.load_shop_from_view) {
                 // a run opened in the shop: its cards are already there
                 G.load_shop_from_view = null;
@@ -78,7 +85,12 @@ function update_shop(_dt: number) {
                     area.emplace(c);
                   }
                 };
-                if (v) { put(G.shop_jokers, v.jokers); put(G.shop_vouchers, v.vouchers); put(G.shop_booster, v.boosters, true); }
+                if (v) {
+                  put(G.shop_jokers, v.jokers);
+                  G.shop_vouchers.config.card_limit = Math.max(1, v.vouchers.length); // (a Voucher Tag's second voucher)
+                  put(G.shop_vouchers, v.vouchers);
+                  put(G.shop_booster, v.boosters, true);
+                }
               }
               return true;
             }

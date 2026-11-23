@@ -1,7 +1,9 @@
 // Emotes: quick messages between the players of a match (the API keeps them a
 // few seconds in the match's view). A button opens the eight of them; a sent
-// or received one pops up at the top of the screen as a bubble, over the menus
-// too (G.I.POPUP is drawn last), with the sender's name.
+// or received one pops up at the top of the screen as a bubble, over the cards
+// and menus, with the sender's name. (A box draws once a frame, the first time:
+// with a `parent` the screen's own boxes, drawn before the cards, skip it, and
+// G.I.POPUP, drawn last, draws it.)
 import { G, UIBox, DynaText, play_sound } from '@/shared/lib/engine';
 import { UIBox_button } from '@/shared/ui';
 import { matches, type EmoteName, type MatchView } from '@/shared/api';
@@ -55,7 +57,7 @@ export function show_emote(m: MatchView, seat: number, emote: EmoteName) {
         { n: G.UIT.O, config: { object: new DynaText({ string: [text_of(emote)], colours: [G.C.WHITE], shadow: true, float: true, bump: true, scale: 0.5, pop_in: 0, pop_in_rate: 6, silent: true }) } },
       ] },
     ] },
-    config: { major: G.ROOM_ATTACH, align: 'tm', offset: { x: 0, y: 0.35 + 0.75 * bubbles.length }, bond: 'Weak' },
+    config: { major: G.ROOM_ATTACH, parent: G.ROOM_ATTACH, align: 'tm', offset: { x: 0, y: 0.35 + 0.75 * bubbles.length }, bond: 'Weak' },
   });
   G.I.POPUP.push(box);
   bubbles.push(box);
@@ -90,7 +92,7 @@ export function register_emote_funcs() {
     if (!m || m.players.length < 2) return;
     picker = new UIBox({
       definition: picker_definition(),
-      config: { major: e?.UIBox ?? G.ROOM_ATTACH, align: e?.UIBox ? 'cl' : 'cm', offset: { x: -0.1, y: 0 }, bond: 'Weak' },
+      config: { major: e?.UIBox ?? G.ROOM_ATTACH, parent: e?.UIBox ?? G.ROOM_ATTACH, align: e?.UIBox ? 'cl' : 'cm', offset: { x: -0.1, y: 0 }, bond: 'Weak' },
     });
     G.I.POPUP.push(picker);
   };
