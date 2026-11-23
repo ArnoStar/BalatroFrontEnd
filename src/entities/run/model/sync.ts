@@ -120,6 +120,14 @@ export function sync_game(view: GameView, opts: { keep?: ('dollars' | 'chips')[]
   GAME.skips = info.skips;
   GAME.hands_played = info.hands_played;
   GAME.unused_discards = info.unused_discards;
+  if (info.consumable_usage_total) GAME.consumeable_usage_total = { ...info.consumable_usage_total };
+  if (info.consumable_usage) {
+    GAME.consumeable_usage = {};
+    for (const [key, count] of Object.entries(info.consumable_usage)) {
+      GAME.consumeable_usage[key] = { count, set: G.P_CENTERS[key]?.set, order: G.P_CENTERS[key]?.order };
+    }
+  }
+  if (info.ecto_minus !== undefined) GAME.ecto_minus = info.ecto_minus;
   const rt = info.round_targets;
   if (rt.idol_rank) cr.idol_card = { rank: rt.idol_rank, suit: rt.idol_suit, id: null };
   if (rt.mail_rank) cr.mail_card = { rank: rt.mail_rank };

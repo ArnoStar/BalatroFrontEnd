@@ -63,6 +63,10 @@ export interface RunInfo {
   probability_normal: number; last_tarot_planet: string | null; interest_amount: number; interest_cap: number;
   discount_percent: number; bankrupt_at: number; skips: number; hands_played: number; unused_discards: number;
   round_targets: RoundTargets;
+  /** consumables used this run by kind (Fortune Teller) and by key (Satellite); APIs before them leave them out */
+  consumable_usage_total?: Record<string, number>; consumable_usage?: Record<string, number>;
+  /** the hand size the next Ectoplasm takes */
+  ecto_minus?: number;
 }
 
 export type ActionType = 'select_blind' | 'skip_blind' | 'reroll_boss' | 'play' | 'discard' | 'sort' | 'cash_out' | 'buy' | 'continue'
@@ -82,7 +86,9 @@ export interface GameView {
   joker_slots: number; consumable_slots: number; round_score: number | null;
   /** the cards the shop offers besides vouchers and packs (2; Overstock and Overstock Plus add one each) */
   shop_slots?: number;
-  blind: BlindView | null; blind_select: BlindSelectView | null;
+  blind: BlindView | null;
+  /** the ante's blinds: in every phase but game_over (Run Info), the choice on the blind select */
+  blind_select: BlindSelectView | null;
   hand: CardView[]; jokers: CardView[]; consumables: CardView[]; deck: DeckView; discard_count: number;
   shop: ShopView | null; pack: PackView | null; round_eval: RoundEvalView | null;
   tags: TagView[]; vouchers: string[]; poker_hands: PokerHandView[]; last_hand: HandScore | null; info: RunInfo;

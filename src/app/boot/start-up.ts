@@ -1,8 +1,9 @@
 // Game:start_up, Game:set_render_settings and Game:set_language (game.lua):
 // textures, shaders, the font, the controller and the shared sprites.
 import { G, Sprite, Controller, EventManager, init_sources, init_window } from '@/shared/lib/engine';
-import { love, loadImage, loadShader } from '@/shared/lib/love';
+import { love, loadImage, loadShader, Shader } from '@/shared/lib/love';
 import { load_game_data, init_profile, load_settings, init_languages } from '@/shared/config';
+import wear_fs from './shaders/wear.fs?raw';
 
 // (the game is served under a base path: /play/)
 const RES = `${import.meta.env.BASE_URL}resources`;
@@ -10,7 +11,10 @@ const RES = `${import.meta.env.BASE_URL}resources`;
 const COLLABS = ['AU', 'TW', 'VS', 'DTD', 'CYP', 'STS', 'TBoI', 'SV', 'SK', 'DS', 'CL', 'D2', 'PC', 'WF', 'EG', 'XR', 'CR', 'BUG', 'FO', 'DBD', 'C7', 'R', 'AC', 'STP'];
 
 const SHADERS = ['background', 'booster', 'CRT', 'debuff', 'dissolve', 'flame', 'flash', 'foil', 'gold_seal', 'holo', 'hologram',
-  'negative', 'negative_shine', 'played', 'polychrome', 'skew', 'splash', 'voucher', 'vortex', 'wear'];
+  'negative', 'negative_shine', 'played', 'polychrome', 'skew', 'splash', 'voucher', 'vortex'];
+// the site's own shaders (the game has nothing like them): in the source, as `npm run assets` replaces
+// public/resources with the game's files (which never reach the repository or the build)
+const OWN_SHADERS: Record<string, string> = { wear: wear_fs };
 
 async function set_render_settings(progress: (p: number) => void) {
   const ts = G.SETTINGS.GRAPHICS.texture_scaling;
@@ -85,6 +89,7 @@ export async function start_up(progress: (p: number) => void) {
   G.SHADERS = {};
   await Promise.all([
     ...SHADERS.map(async (name) => { G.SHADERS[name] = await loadShader(`${RES}/shaders/${name}.fs`, name); }),
+    ...Object.entries(OWN_SHADERS).map(async ([name, code]) => { G.SHADERS[name] = new Shader(love.graphics, code, name); }),
     set_render_settings(progress),
     init_languages(),
   ]);
