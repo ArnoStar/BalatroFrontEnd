@@ -50,7 +50,6 @@ function stats_tab() {
     stat_row(tr('streak'), `${p.streak} (${p.best_streak})`, G.C.GOLD),
     stat_row(tr('damage_dealt'), String(p.damage_dealt), G.C.RED),
     stat_row(tr('damage_taken'), String(p.damage_taken)),
-    stat_row(tr('biggest_hit'), String(p.biggest_hit), G.C.RED),
     stat_row(tr('best_ante'), String(p.best_ante), G.C.FILTER),
     heading(tr('rivals'), G.C.UI.TEXT_LIGHT),
     ...people(s.rivals, (o) => `${o.won} - ${o.lost} (${o.played})`),

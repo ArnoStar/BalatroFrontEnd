@@ -297,7 +297,6 @@ function summary_table(m: MatchView) {
     summary_row('', seats.map((seat) => m.players[seat]?.name ?? '?'), G.C.GOLD),
     summary_row(tr('hp_left'), vals((p) => String(p.hp ?? 0)), G.C.RED),
     summary_row(tr('damage_dealt'), vals((p) => String(p.damage_dealt ?? 0))),
-    summary_row(tr('biggest_hit'), vals((p) => String(p.biggest_hit ?? 0))),
     summary_row(tr('rounds_won'), vals((p) => String(p.rounds_won ?? 0))),
     summary_row(tr('best_hand'), vals((p) => fmt(p.best_hand ?? 0)), G.C.BLUE),
   ] }] }];
